@@ -1,0 +1,42 @@
+name: Daily Research Update
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_resynthesis:
+        description: 'Force regenerate all summaries'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run update pipeline
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FORCE_RESYNTHESIS: ${{ github.event.inputs.force_resynthesis || 'false' }}
+        run: python scripts/run_all.py
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git diff --staged --quiet || git commit -m "Daily update: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
