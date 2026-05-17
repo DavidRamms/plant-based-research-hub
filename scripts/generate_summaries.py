@@ -9,7 +9,7 @@ import sqlite3
 
 from groq import Groq
 
-from config import TOPICS, GROQ_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY
+from config import TOPICS, GROQ_MODEL, GROQ_STATS_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY
 from database import (
     get_studies_for_topic,
     get_summary,
@@ -306,9 +306,9 @@ def extract_stats_for_topic(
         {"role": "user", "content": user_prompt},
     ]
 
-    # First attempt
+    # First attempt — use the 8b model (500k TPD) to keep stats off the 70b quota
     response = client.chat.completions.create(
-        model=GROQ_MODEL,
+        model=GROQ_STATS_MODEL,
         messages=messages,
         temperature=0.1,
         max_tokens=4096,
@@ -331,7 +331,7 @@ def extract_stats_for_topic(
             ),
         })
         retry_response = client.chat.completions.create(
-            model=GROQ_MODEL,
+            model=GROQ_STATS_MODEL,
             messages=messages,
             temperature=0.1,
             max_tokens=4096,

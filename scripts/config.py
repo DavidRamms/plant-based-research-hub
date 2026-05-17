@@ -177,8 +177,12 @@ MIN_QUALITY_FOR_NARRATIVE = 4
 # Years to fetch on first/bootstrap run
 BOOTSTRAP_YEARS = 5
 
-# Groq model for summary generation
+# Groq model for narrative summaries (70b: 100k TPD free tier)
 GROQ_MODEL = "llama-3.3-70b-versatile"
+
+# Groq model for stats extraction — smaller model, 500k TPD free tier,
+# keeps stats extraction off the 70b quota entirely
+GROQ_STATS_MODEL = "llama-3.1-8b-instant"
 
 # Max studies to send per Groq summary call (prioritised by tier then recency).
 # Groq free tier: 12,000 TPM hard limit. With 25 studies at 200-char abstracts:
