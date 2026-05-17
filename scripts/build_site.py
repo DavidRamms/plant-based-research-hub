@@ -999,3 +999,14 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
     assets_dir.mkdir(exist_ok=True)
 
     print(f"  Site build complete. Total studies: {total_studies}")
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent))
+    from database import get_connection, init_db
+    PROJECT_ROOT = Path(__file__).parent.parent
+    conn = get_connection(str(PROJECT_ROOT / "data" / "studies.db"))
+    init_db(conn)
+    build_static_site(conn, PROJECT_ROOT / "docs")
+    conn.close()
