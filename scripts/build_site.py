@@ -22,7 +22,7 @@ BASE_HTML = """<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Plant-Based Research Hub{% endblock %}</title>
-  <link rel="stylesheet" href="{{ assets_prefix }}assets/style.css" />
+  <link rel="stylesheet" href="{{ assets_prefix }}assets/style.css?v={{ build_ts }}" />
 </head>
 <body>
   <nav class="navbar">
@@ -46,7 +46,7 @@ BASE_HTML = """<!DOCTYPE html>
       <p>Last updated: {{ last_updated }}</p>
     </div>
   </footer>
-  <script src="{{ assets_prefix }}assets/main.js"></script>
+  <script src="{{ assets_prefix }}assets/main.js?v={{ build_ts }}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
@@ -757,7 +757,9 @@ STATS_PAGE_TEMPLATE = """{% extends "base.html" %}
 def _make_env() -> Environment:
     """Create a Jinja2 environment with our inline templates."""
     env = Environment(loader=BaseLoader())
-    env.globals["last_updated"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.utcnow()
+    env.globals["last_updated"] = now.strftime("%Y-%m-%d %H:%M UTC")
+    env.globals["build_ts"] = now.strftime("%Y%m%d%H%M")
 
     # Register templates
     template_map = {
