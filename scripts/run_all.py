@@ -84,12 +84,18 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Step 2b: Extract quotable statistics
     # ------------------------------------------------------------------
+    # Bootstrap stats: if stats table is empty, treat as force_all so the
+    # first deployment populates stats without needing a manual trigger.
+    from database import get_all_stats
+    stats_bootstrap = len(get_all_stats(conn)) == 0
+    force_stats = force_resynthesis or stats_bootstrap
+
     print("\nStep 2b: Extracting quotable statistics...")
     if not os.getenv("GROQ_API_KEY"):
         print("  WARNING: GROQ_API_KEY not set, skipping stats extraction")
     else:
         from generate_summaries import extract_stats_for_all_topics
-        extract_stats_for_all_topics(conn, topics_with_new, force_all=force_resynthesis)
+        extract_stats_for_all_topics(conn, topics_with_new, force_all=force_stats)
 
     # ------------------------------------------------------------------
     # Step 3: Build static site
