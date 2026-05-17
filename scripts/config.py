@@ -213,5 +213,9 @@ BOOTSTRAP_YEARS = 5
 # Groq model for summary generation
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
+# Max studies to send per Groq summary call (prioritised by tier then recency)
+# Keeps prompts under ~40k tokens to stay within Groq free-tier limits
+MAX_STUDIES_PER_SUMMARY = 60
+
 # Seconds between PubMed API requests to respect rate limits
 RATE_LIMIT_DELAY = 0.4

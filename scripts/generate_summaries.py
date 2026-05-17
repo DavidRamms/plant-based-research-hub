@@ -9,7 +9,7 @@ import sqlite3
 
 from groq import Groq
 
-from config import TOPICS, GROQ_MODEL, MIN_QUALITY_FOR_NARRATIVE
+from config import TOPICS, GROQ_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY
 from database import (
     get_studies_for_topic,
     get_summary,
@@ -43,7 +43,7 @@ def format_studies_for_prompt(studies: list[dict]) -> str:
             f"Title: {study.get('title', '')}\n"
             f"Authors: {study.get('authors', '')}\n"
             f"Journal: {study.get('journal', '')}\n"
-            f"Abstract: {abstract[:600]}{'...' if len(abstract) > 600 else ''}\n"
+            f"Abstract: {abstract[:350]}{'...' if len(abstract) > 350 else ''}\n"
         )
         if funding:
             block += f"Funding notes: {funding}\n"
@@ -207,13 +207,30 @@ def update_summaries_for_topics(
             print(f"    No qualifying studies found for {topic_key}, skipping.")
             continue
 
-        print(f"    Using {len(studies)} qualifying studies (tier 1-{MIN_QUALITY_FOR_NARRATIVE})...")
+        total_qualifying = len(studies)
 
-        sections = generate_topic_summary(topic_key, topic_config, studies)
+        # Cap studies sent to Groq: prioritise by quality tier (ascending = better first),
+        # then by recency (descending). This keeps prompts within Groq's free-tier limits.
+        studies_sorted = sorted(
+            studies,
+            key=lambda s: (s.get("quality_tier") or 5, -(s.get("pub_year") or 0)),
+        )
+        studies_for_prompt = studies_sorted[:MAX_STUDIES_PER_SUMMARY]
 
-        # Determine latest study year
+        print(
+            f"    {total_qualifying} qualifying studies — "
+            f"sending top {len(studies_for_prompt)} (by tier + recency) to Groq..."
+        )
+
+        try:
+            sections = generate_topic_summary(topic_key, topic_config, studies_for_prompt)
+        except Exception as exc:
+            print(f"    [ERROR] Summary generation failed for {topic_key}: {exc}")
+            continue
+
+        # Determine latest study year across ALL qualifying studies (not just the capped set)
         years = [s["pub_year"] for s in studies if s.get("pub_year")]
         latest_year = max(years) if years else None
 
-        upsert_summary(conn, topic_key, sections, len(studies), latest_year)
+        upsert_summary(conn, topic_key, sections, total_qualifying, latest_year)
         print(f"    Summary saved.")
