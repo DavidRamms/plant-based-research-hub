@@ -83,17 +83,157 @@
     <div class="filter-group filter-actions">
       <button id="stats-clear-filters" class="btn-secondary">Clear Filters</button>
     </div>
+    <div class="filter-group">
+      <label for="stats-sort">Sort by</label>
+      <select id="stats-sort">
+        <option value="year-desc">Most Recent</option>
+        <option value="year-asc">Oldest First</option>
+        <option value="tier-asc">Highest Quality</option>
+        <option value="n-desc">Largest Study</option>
+        <option value="magnitude-desc">Largest Effect</option>
+      </select>
+    </div>
   </div>
 
-  <p class="results-count" id="stats-results-count">Showing 0 of 0 statistics</p>
+  <p class="results-count" id="stats-results-count">Showing 2 of 3 statistics</p>
 
   <section class="stats-list-section" id="stats-key-findings">
     <h2>Key Findings</h2>
     
-    <p class="no-stats-msg">No statistics available yet. Run the pipeline with a Groq API key to extract statistics.</p>
+    
+    <div class="stat-card tier-1"
+         data-topic="bone_density"
+         data-diet="plant-based"
+         data-direction="reduction"
+         data-tier="1"
+         data-year="2025"
+         data-magnitude="34">
+      <div class="stat-card-header">
+        <span class="quality-badge tier-1">
+          Meta-analysis
+          
+        </span>
+        
+      </div>
+      <p class="stat-sentence">&ldquo;Plant-based diet was associated with a 34% lower risk of osteoporosis compared to omnivores&rdquo;</p>
+      
+      <div class="stat-quote-toggle">
+        <button class="abstract-btn" data-target="stat-quote-3">Show original quote</button>
+        <div class="abstract-content" id="stat-quote-3" style="display:none;">
+          <p>BACKGROUND & AIMS: Plant-based diet is growing in popularity throughout the world for various reasons, yet its effect on bone health, especially osteoporosis, remains controversial. This systematic re...</p>
+        </div>
+      </div>
+      
+      
+      <p class="stat-meta">
+        Zheng S, Yu T, Hou J et al., 2025
+        &middot;
+        meta-analysis
+        
+        &middot; Bone Density & Fracture Risk
+      </p>
+      <button class="copy-btn"
+        data-copy-sentence="Plant-based diet was associated with a 34% lower risk of osteoporosis compared to omnivores"
+        data-copy-authors="Zheng S, Yu T, Hou J et al."
+        data-copy-year="2025"
+        data-copy-study-type="meta-analysis"
+        data-copy-pmid="40494032"
+        onclick="copyStatCitation(this)">&#x1F4CB; Copy citation</button>
+    </div>
+    
+    <div class="stat-card tier-1"
+         data-topic="bone_density"
+         data-diet="other"
+         data-direction="increase"
+         data-tier="1"
+         data-year="2025"
+         data-magnitude="0">
+      <div class="stat-card-header">
+        <span class="quality-badge tier-1">
+          Meta-analysis
+          
+        </span>
+        
+      </div>
+      <p class="stat-sentence">&ldquo;Dairy and soybean had a significant difference in bone health in women&rdquo;</p>
+      
+      <div class="stat-quote-toggle">
+        <button class="abstract-btn" data-target="stat-quote-4">Show original quote</button>
+        <div class="abstract-content" id="stat-quote-4" style="display:none;">
+          <p>Background/Objectives: Dairy and soybean are important potential dietary sources of bone health. However, their comparative effectiveness and the role of specific components remain unclear. In this ne...</p>
+        </div>
+      </div>
+      
+      
+      <p class="stat-meta">
+        You L, Wang L, Zhou S et al., 2025
+        &middot;
+        meta-analysis
+        
+        &middot; Bone Density & Fracture Risk
+      </p>
+      <button class="copy-btn"
+        data-copy-sentence="Dairy and soybean had a significant difference in bone health in women"
+        data-copy-authors="You L, Wang L, Zhou S et al."
+        data-copy-year="2025"
+        data-copy-study-type="meta-analysis"
+        data-copy-pmid="40944221"
+        onclick="copyStatCitation(this)">&#x1F4CB; Copy citation</button>
+    </div>
+    
     
   </section>
 
+  
+  <section class="stats-list-section" id="stats-null-findings">
+    <div class="collapsible-section" data-open="false">
+      <button class="section-toggle">
+        <span class="section-title">Null Findings (1)</span>
+        <span class="toggle-icon">&#9660;</span>
+      </button>
+      <div class="section-content">
+        
+        <div class="stat-card tier-2"
+             data-topic="bone_density"
+             data-diet="plant-based meat analogues"
+             data-direction="null"
+             data-tier="2">
+          <div class="stat-card-header">
+            <span class="quality-badge tier-2">
+              RCT
+              
+            </span>
+            <span class="null-finding-badge">Null finding</span>
+          </div>
+          <p class="stat-sentence">&ldquo;There was no significant difference in bone mineral density between plant-based meat analogues and animal-based meats&rdquo;</p>
+          
+          <div class="stat-quote-toggle">
+            <button class="abstract-btn" data-target="stat-quote-5">Show original quote</button>
+            <div class="abstract-content" id="stat-quote-5" style="display:none;">
+              <p>BACKGROUND AND AIM: Plant-based meat analogues (PBMA) are rising in popularity, yet its nutritional efficacy remains unclear. This study examined the impact of protein-matched animal-based meat diets...</p>
+            </div>
+          </div>
+          
+          
+          <p class="stat-meta">
+            Fu AS, Osman F, Cameron-Smith D et al., 2026
+            &middot;
+            RCT
+            
+            &middot; Bone Density & Fracture Risk
+          </p>
+          <button class="copy-btn"
+            data-copy-sentence="There was no significant difference in bone mineral density between plant-based meat analogues and animal-based meats"
+            data-copy-authors="Fu AS, Osman F, Cameron-Smith D et al."
+            data-copy-year="2026"
+            data-copy-study-type="RCT"
+            data-copy-pmid="41785660"
+            onclick="copyStatCitation(this)">&#x1F4CB; Copy citation</button>
+        </div>
+        
+      </div>
+    </div>
+  </section>
   
 
 </div>
@@ -102,7 +242,7 @@
   <footer>
     <div class="footer-container">
       <p>Data sourced from <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener">PubMed / NCBI</a>. Summaries generated by AI. Not medical advice.</p>
-      <p>Last updated: 2026-05-17 17:09 UTC</p>
+      <p>Last updated: 2026-05-17 17:34 UTC</p>
     </div>
   </footer>
   <script src="../assets/main.js"></script>
