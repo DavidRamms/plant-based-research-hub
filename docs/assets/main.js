@@ -38,6 +38,19 @@
     });
   }
 
+  /* ── Generic sort helper ─────────────────────────────────── */
+  function sortElements(elements, sortValue) {
+    var parts = sortValue.split("-");
+    var key = parts[0];           // year | tier | n | magnitude
+    var dir = parts[1];           // asc | desc
+
+    elements.sort(function (a, b) {
+      var av = parseFloat(a.dataset[key]) || 0;
+      var bv = parseFloat(b.dataset[key]) || 0;
+      return dir === "asc" ? av - bv : bv - av;
+    });
+  }
+
   /* ── Database page ───────────────────────────────────────── */
   function initDatabasePage() {
     var tableBody = document.getElementById("study-table-body");
@@ -165,6 +178,19 @@
       }
     }
 
+    // ── Sort dropdown ────────────────────────────────────────
+    var dbSort = document.getElementById("db-sort");
+    function applyDbSort() {
+      if (!dbSort) return;
+      var rows = Array.from(tableBody.querySelectorAll("tr"));
+      sortElements(rows, dbSort.value);
+      rows.forEach(function (r) { tableBody.appendChild(r); });
+    }
+    if (dbSort) {
+      dbSort.addEventListener("change", applyDbSort);
+      applyDbSort(); // apply default on load
+    }
+
     // ── Event listeners ──────────────────────────────────────
     if (searchInput)   searchInput.addEventListener("input",  applyFilters);
     if (filterTopic)   filterTopic.addEventListener("change", applyFilters);
@@ -258,6 +284,22 @@
     }
   }
 
+  /* ── Topic page study sort ───────────────────────────────── */
+  function initTopicSort() {
+    var sortSelect = document.getElementById("topic-sort");
+    var container  = document.getElementById("topic-studies-list");
+    if (!sortSelect || !container) return;
+
+    function applyTopicSort() {
+      var cards = Array.from(container.querySelectorAll(".study-card"));
+      sortElements(cards, sortSelect.value);
+      cards.forEach(function (c) { container.appendChild(c); });
+    }
+
+    sortSelect.addEventListener("change", applyTopicSort);
+    applyTopicSort(); // apply default on load
+  }
+
   /* ── Copy stat citation helper ──────────────────────────── */
   window.copyStatCitation = function (btn) {
     var sentence  = btn.getAttribute("data-copy-sentence")  || "";
@@ -290,6 +332,7 @@
     var filterDiet      = document.getElementById("stats-filter-diet");
     var filterDirection = document.getElementById("stats-filter-direction");
     var filterQuality   = document.getElementById("stats-filter-quality");
+    var statsSort       = document.getElementById("stats-sort");
     var clearBtn        = document.getElementById("stats-clear-filters");
     var resultsCount    = document.getElementById("stats-results-count");
 
@@ -327,12 +370,23 @@
       if (resultsCount) {
         resultsCount.textContent = "Showing " + visibleCount + " of " + totalCount + " statistics";
       }
+
+      // Apply sort after filtering
+      if (statsSort) {
+        var container = document.getElementById("stats-key-findings");
+        if (container) {
+          var visible = Array.from(container.querySelectorAll(".stat-card:not(.hidden)"));
+          sortElements(visible, statsSort.value);
+          visible.forEach(function (c) { container.appendChild(c); });
+        }
+      }
     }
 
     if (filterTopic)     filterTopic.addEventListener("change",  applyStatsFilters);
     if (filterDiet)      filterDiet.addEventListener("change",   applyStatsFilters);
     if (filterDirection) filterDirection.addEventListener("change", applyStatsFilters);
     if (filterQuality)   filterQuality.addEventListener("change",   applyStatsFilters);
+    if (statsSort)       statsSort.addEventListener("change",       applyStatsFilters);
 
     if (clearBtn) {
       clearBtn.addEventListener("click", function () {
@@ -344,10 +398,8 @@
       });
     }
 
-    // Initial count
-    if (resultsCount) {
-      resultsCount.textContent = "Showing " + totalCount + " of " + totalCount + " statistics";
-    }
+    // Apply default sort on load
+    applyStatsFilters();
   }
 
   /* ── Init ────────────────────────────────────────────────── */
@@ -355,6 +407,7 @@
     initCollapsibles();
     initAbstractToggles();
     initDatabasePage();
+    initTopicSort();
     initStatsPage();
   });
 

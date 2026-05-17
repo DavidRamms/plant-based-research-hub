@@ -284,9 +284,24 @@ TOPIC_PAGE_TEMPLATE = """{% extends "base.html" %}
   {% endif %}
 
   <section class="studies-section">
-    <h2>Studies ({{ study_count }} total)</h2>
+    <div class="section-header-row">
+      <h2>Studies ({{ study_count }} total)</h2>
+      <div class="sort-control">
+        <label for="topic-sort">Sort by:</label>
+        <select id="topic-sort">
+          <option value="year-desc">Most Recent</option>
+          <option value="year-asc">Oldest First</option>
+          <option value="tier-asc">Highest Quality</option>
+          <option value="n-desc">Largest Study</option>
+        </select>
+      </div>
+    </div>
+    <div id="topic-studies-list">
     {% for study in studies %}
-    <div class="study-card tier-{{ study.quality_tier }}">
+    <div class="study-card tier-{{ study.quality_tier }}"
+         data-year="{{ study.pub_year or 0 }}"
+         data-tier="{{ study.quality_tier or 5 }}"
+         data-n="{{ study.sample_size or 0 }}">
       <div class="study-card-header">
         <span class="quality-badge tier-{{ study.quality_tier }}">
           {% if study.quality_tier == 1 %}Meta-Analysis / Systematic Review
@@ -318,6 +333,7 @@ TOPIC_PAGE_TEMPLATE = """{% extends "base.html" %}
       {% endif %}
     </div>
     {% endfor %}
+    </div>{# end topic-studies-list #}
   </section>
 </div>
 {% endblock %}
@@ -379,6 +395,15 @@ DATABASE_TEMPLATE = """{% extends "base.html" %}
     </div>
     <div class="filter-group filter-actions">
       <button id="clear-filters" class="btn-secondary">Clear Filters</button>
+    </div>
+    <div class="filter-group">
+      <label for="db-sort">Sort by</label>
+      <select id="db-sort">
+        <option value="year-desc">Most Recent</option>
+        <option value="year-asc">Oldest First</option>
+        <option value="tier-asc">Highest Quality</option>
+        <option value="n-desc">Largest Study</option>
+      </select>
     </div>
   </div>
 
@@ -593,6 +618,16 @@ STATS_PAGE_TEMPLATE = """{% extends "base.html" %}
     <div class="filter-group filter-actions">
       <button id="stats-clear-filters" class="btn-secondary">Clear Filters</button>
     </div>
+    <div class="filter-group">
+      <label for="stats-sort">Sort by</label>
+      <select id="stats-sort">
+        <option value="year-desc">Most Recent</option>
+        <option value="year-asc">Oldest First</option>
+        <option value="tier-asc">Highest Quality</option>
+        <option value="n-desc">Largest Study</option>
+        <option value="magnitude-desc">Largest Effect</option>
+      </select>
+    </div>
   </div>
 
   <p class="results-count" id="stats-results-count">Showing {{ non_null_stats|length }} of {{ total_stats_count }} statistics</p>
@@ -605,7 +640,9 @@ STATS_PAGE_TEMPLATE = """{% extends "base.html" %}
          data-topic="{{ stat.topic }}"
          data-diet="{{ stat.diet_type }}"
          data-direction="{{ stat.direction }}"
-         data-tier="{{ stat.quality_tier }}">
+         data-tier="{{ stat.quality_tier }}"
+         data-year="{{ stat.year or 0 }}"
+         data-magnitude="{{ stat.magnitude | replace('%','') | replace(' ','') if stat.magnitude else '0' }}">
       <div class="stat-card-header">
         <span class="quality-badge tier-{{ stat.quality_tier }}">
           {% if stat.quality_tier == 1 %}Meta-analysis
