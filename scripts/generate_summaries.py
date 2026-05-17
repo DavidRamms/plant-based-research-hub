@@ -43,7 +43,7 @@ def format_studies_for_prompt(studies: list[dict]) -> str:
             f"Title: {study.get('title', '')}\n"
             f"Authors: {study.get('authors', '')}\n"
             f"Journal: {study.get('journal', '')}\n"
-            f"Abstract: {abstract[:350]}{'...' if len(abstract) > 350 else ''}\n"
+            f"Abstract: {abstract[:200]}{'...' if len(abstract) > 200 else ''}\n"
         )
         if funding:
             block += f"Funding notes: {funding}\n"

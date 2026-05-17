@@ -213,9 +213,10 @@ BOOTSTRAP_YEARS = 5
 # Groq model for summary generation
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
-# Max studies to send per Groq summary call (prioritised by tier then recency)
-# Keeps prompts under ~40k tokens to stay within Groq free-tier limits
-MAX_STUDIES_PER_SUMMARY = 60
+# Max studies to send per Groq summary call (prioritised by tier then recency).
+# Groq free tier: 12,000 TPM hard limit. With 25 studies at 200-char abstracts:
+# ~3,250 tokens (studies) + 500 (prompt) + 4,096 (max output) ≈ 7,850 — safely under.
+MAX_STUDIES_PER_SUMMARY = 25
 
 # Seconds between PubMed API requests to respect rate limits
 RATE_LIMIT_DELAY = 0.4
