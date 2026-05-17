@@ -9,7 +9,7 @@ import sqlite3
 
 from groq import Groq
 
-from config import TOPICS, GROQ_MODEL, GROQ_STATS_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY
+from config import TOPICS, GROQ_MODEL, GROQ_STATS_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY, MAX_STUDIES_PER_EXTRACTION
 from database import (
     get_studies_for_topic,
     get_summary,
@@ -372,15 +372,17 @@ def extract_stats_for_all_topics(
 
         print(f"  Extracting stats for: {topic_config['name']}")
 
-        # Use tier 1-2 studies only, uncapped
+        # Tier 1-2 studies, capped to stay under 8b model's 6k TPM limit
         studies = get_studies_for_topic(conn, topic_key, min_quality_tier=2)
+        studies = sorted(studies, key=lambda s: (s.get("quality_tier") or 5, -(s.get("pub_year") or 0)))
+        studies = studies[:MAX_STUDIES_PER_EXTRACTION]
 
         if not studies:
             print(f"    No tier 1-2 studies found for {topic_key}, skipping.")
             insert_stats_for_topic(conn, topic_key, [])
             continue
 
-        print(f"    {len(studies)} tier 1-2 studies found, sending to Groq...")
+        print(f"    Sending top {len(studies)} tier 1-2 studies to Groq...")
 
         try:
             raw_stats = extract_stats_for_topic(topic_key, topic_config, studies)
@@ -573,16 +575,18 @@ def extract_contested_for_all_topics(
 
         print(f"  Extracting contested claims for: {topic_config['name']}")
 
-        # Use ALL studies for this topic (all tiers, no cap) so the model
-        # has the full picture to find counter-evidence
+        # All tiers, capped — prioritise tier 1-2 first so counter-evidence
+        # candidates are included, then fill remaining slots with others
         all_studies = get_studies_for_topic(conn, topic_key, min_quality_tier=5)
+        all_studies = sorted(all_studies, key=lambda s: (s.get("quality_tier") or 5, -(s.get("pub_year") or 0)))
+        all_studies = all_studies[:MAX_STUDIES_PER_EXTRACTION]
 
         if not all_studies:
             print(f"    No studies found for {topic_key}, skipping.")
             insert_contested_for_topic(conn, topic_key, [])
             continue
 
-        print(f"    {len(all_studies)} studies found, sending to Groq...")
+        print(f"    Sending top {len(all_studies)} studies to Groq...")
 
         try:
             contested = extract_contested_for_topic(topic_key, topic_config, all_studies)
