@@ -15,6 +15,8 @@ from database import (
     get_summary,
     upsert_summary,
     get_study_count,
+    insert_stats_for_topic,
+    mark_contested_stats,
 )
 
 _groq_client: Groq | None = None
@@ -234,3 +236,195 @@ def update_summaries_for_topics(
 
         upsert_summary(conn, topic_key, sections, total_qualifying, latest_year)
         print(f"    Summary saved.")
+
+
+STATS_SYSTEM_PROMPT = (
+    "You are extracting specific quantitative findings from peer-reviewed nutrition research. "
+    "You extract only what is explicitly stated — never calculate, infer, or extrapolate. "
+    "Every stat you extract must have a number that appears verbatim in the abstract."
+)
+
+
+def _build_stats_user_prompt(topic_key: str, topic_config: dict, studies: list[dict]) -> str:
+    formatted = format_studies_for_prompt(studies)
+    topic_name = topic_config["name"]
+    n_studies = len(studies)
+
+    return f"""Extract all qualifying quantitative findings from the following {n_studies} peer-reviewed studies on: **{topic_name}**.
+
+A finding qualifies if it has ALL of:
+1. A specific percentage, number, or ratio appearing explicitly in the abstract
+2. A named health outcome
+3. An explicit or implied comparison group (vs omnivores, vs baseline, vs meat-eaters)
+
+For null findings (no significant difference found), extract them too with direction="null".
+
+Respond ONLY with valid JSON containing a single key "stats" whose value is an array. Each element must have these fields:
+
+{{
+  "stat_sentence": "Vegan diets were associated with a 34% lower risk of cardiovascular mortality compared to omnivores",
+  "original_quote": "exact text from abstract containing this stat",
+  "outcome": "cardiovascular mortality",
+  "direction": "reduction",
+  "magnitude": "34%",
+  "diet_type": "vegan",
+  "is_null_finding": false,
+  "confidence_interval": "HR 0.66, 95% CI 0.52-0.84"
+}}
+
+Rules:
+- diet_type must be one of: "vegan", "vegetarian", "plant-based", "meat-free", "other"
+- direction must be one of: "reduction", "increase", "null"
+- is_null_finding must be true only when direction is "null"
+- confidence_interval may be null if not stated
+- Only extract numbers that appear verbatim in the abstract — never calculate or estimate
+- If a study has no qualifying findings, do not add it to the array
+
+Respond ONLY with the JSON object. No markdown, no code blocks, no preamble.
+
+---
+STUDIES:
+
+{formatted}
+"""
+
+
+def extract_stats_for_topic(
+    topic_key: str,
+    topic_config: dict,
+    studies: list[dict],
+) -> list[dict]:
+    """Extract quotable statistics from tier 1-2 studies for a topic."""
+    if not studies:
+        return []
+
+    client = _get_client()
+    user_prompt = _build_stats_user_prompt(topic_key, topic_config, studies)
+
+    messages = [
+        {"role": "system", "content": STATS_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    # First attempt
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=messages,
+        temperature=0.1,
+        max_tokens=4096,
+        response_format={"type": "json_object"},
+    )
+    raw_text = response.choices[0].message.content or ""
+    result = _parse_json_response(raw_text)
+
+    if result is None or "stats" not in result:
+        # Retry once
+        print(f"    [WARN] Stats JSON parse failed for {topic_key}, retrying...")
+        messages.append({"role": "assistant", "content": raw_text})
+        messages.append({
+            "role": "user",
+            "content": (
+                "Your previous response could not be parsed. "
+                "Please respond ONLY with a valid JSON object containing exactly one key: "
+                "\"stats\" whose value is an array of stat objects. "
+                "No markdown, no code blocks, no extra text."
+            ),
+        })
+        retry_response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=messages,
+            temperature=0.1,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
+        )
+        raw_text = retry_response.choices[0].message.content or ""
+        result = _parse_json_response(raw_text)
+
+    if result is None or "stats" not in result:
+        print(f"    [ERROR] Could not parse stats JSON for {topic_key}, returning empty list.")
+        return []
+
+    stats_list = result["stats"]
+    if not isinstance(stats_list, list):
+        return []
+    return stats_list
+
+
+def extract_stats_for_all_topics(
+    conn: sqlite3.Connection,
+    topics_to_update: list[str],
+    force_all: bool = False,
+) -> None:
+    """Extract and store quotable stats for topics that need updating."""
+    if force_all:
+        topics = list(TOPICS.keys())
+        print(f"  Force-extracting stats for all {len(topics)} topics...")
+    else:
+        topics = topics_to_update
+        print(f"  Extracting stats for {len(topics)} topics with new studies...")
+
+    for topic_key in topics:
+        topic_config = TOPICS.get(topic_key)
+        if topic_config is None:
+            print(f"  [WARN] Unknown topic key: {topic_key}")
+            continue
+
+        print(f"  Extracting stats for: {topic_config['name']}")
+
+        # Use tier 1-2 studies only, uncapped
+        studies = get_studies_for_topic(conn, topic_key, min_quality_tier=2)
+
+        if not studies:
+            print(f"    No tier 1-2 studies found for {topic_key}, skipping.")
+            insert_stats_for_topic(conn, topic_key, [])
+            continue
+
+        print(f"    {len(studies)} tier 1-2 studies found, sending to Groq...")
+
+        try:
+            raw_stats = extract_stats_for_topic(topic_key, topic_config, studies)
+        except Exception as exc:
+            print(f"    [ERROR] Stats extraction failed for {topic_key}: {exc}")
+            continue
+
+        # Enrich each stat with study metadata
+        # Build a lookup from pmid to study record for enrichment
+        pmid_to_study: dict[str, dict] = {s["pmid"]: s for s in studies}
+
+        enriched: list[dict] = []
+        for stat in raw_stats:
+            # Try to find the study by matching original_quote or pmid hint in stat
+            # We associate stats with a study by finding the study whose abstract
+            # contains the original_quote text
+            original_quote = stat.get("original_quote", "")
+            matched_study: dict | None = None
+            if original_quote:
+                for study in studies:
+                    abstract = study.get("abstract") or ""
+                    if original_quote[:80].lower() in abstract.lower():
+                        matched_study = study
+                        break
+
+            enriched_stat = dict(stat)
+            enriched_stat["is_null_finding"] = 1 if stat.get("is_null_finding") else 0
+            if matched_study:
+                enriched_stat["pmid"] = matched_study.get("pmid")
+                enriched_stat["authors"] = matched_study.get("authors")
+                enriched_stat["year"] = matched_study.get("pub_year")
+                enriched_stat["study_type"] = matched_study.get("study_type")
+                enriched_stat["quality_tier"] = matched_study.get("quality_tier")
+            else:
+                enriched_stat.setdefault("pmid", None)
+                enriched_stat.setdefault("authors", None)
+                enriched_stat.setdefault("year", None)
+                enriched_stat.setdefault("study_type", None)
+                enriched_stat.setdefault("quality_tier", None)
+
+            enriched.append(enriched_stat)
+
+        insert_stats_for_topic(conn, topic_key, enriched)
+        print(f"    Saved {len(enriched)} stats for {topic_key}.")
+
+    # Mark contested stats across all topics
+    mark_contested_stats(conn)
+    print("  Contested stats marked.")

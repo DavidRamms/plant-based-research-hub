@@ -258,11 +258,104 @@
     }
   }
 
+  /* ── Copy stat citation helper ──────────────────────────── */
+  window.copyStatCitation = function (btn) {
+    var sentence  = btn.getAttribute("data-copy-sentence")  || "";
+    var authors   = btn.getAttribute("data-copy-authors")   || "";
+    var year      = btn.getAttribute("data-copy-year")      || "";
+    var studyType = btn.getAttribute("data-copy-study-type")|| "";
+    var pmid      = btn.getAttribute("data-copy-pmid")      || "";
+
+    var parts = ["“" + sentence + "”"];
+    var credit = authors;
+    if (year) credit += ", " + year;
+    if (credit) parts.push("— " + credit + ".");
+    if (studyType) parts.push(studyType + ".");
+    if (pmid) parts.push("PMID: " + pmid + ". https://pubmed.ncbi.nlm.nih.gov/" + pmid + "/");
+
+    var text = parts.join(" ");
+    navigator.clipboard.writeText(text).then(function () {
+      var orig = btn.textContent;
+      btn.textContent = "✓ Copied!";
+      setTimeout(function () { btn.textContent = orig; }, 2000);
+    });
+  };
+
+  /* ── Stats page ──────────────────────────────────────────── */
+  function initStatsPage() {
+    var statsContainer = document.getElementById("stats-key-findings");
+    if (!statsContainer) return;
+
+    var filterTopic     = document.getElementById("stats-filter-topic");
+    var filterDiet      = document.getElementById("stats-filter-diet");
+    var filterDirection = document.getElementById("stats-filter-direction");
+    var filterQuality   = document.getElementById("stats-filter-quality");
+    var clearBtn        = document.getElementById("stats-clear-filters");
+    var resultsCount    = document.getElementById("stats-results-count");
+
+    // Gather all stat cards from both sections
+    var allStatCards = Array.from(document.querySelectorAll(".stat-card[data-topic]"));
+    var totalCount = allStatCards.length;
+
+    function applyStatsFilters() {
+      var topicVal     = filterTopic     ? filterTopic.value     : "";
+      var dietVal      = filterDiet      ? filterDiet.value      : "";
+      var directionVal = filterDirection ? filterDirection.value : "";
+      var qualityVal   = filterQuality   ? filterQuality.value   : "";
+
+      var visibleCount = 0;
+
+      allStatCards.forEach(function (card) {
+        var cardTopic     = card.dataset.topic     || "";
+        var cardDiet      = card.dataset.diet      || "";
+        var cardDirection = card.dataset.direction || "";
+        var cardTier      = parseInt(card.dataset.tier, 10) || 99;
+
+        var passTopic     = !topicVal     || cardTopic === topicVal;
+        var passDiet      = !dietVal      || cardDiet === dietVal;
+        var passDirection = !directionVal || cardDirection === directionVal;
+        var passQuality   = true;
+        if (qualityVal === "highonly") {
+          passQuality = cardTier <= 2;
+        }
+
+        var visible = passTopic && passDiet && passDirection && passQuality;
+        card.classList.toggle("hidden", !visible);
+        if (visible) visibleCount++;
+      });
+
+      if (resultsCount) {
+        resultsCount.textContent = "Showing " + visibleCount + " of " + totalCount + " statistics";
+      }
+    }
+
+    if (filterTopic)     filterTopic.addEventListener("change",  applyStatsFilters);
+    if (filterDiet)      filterDiet.addEventListener("change",   applyStatsFilters);
+    if (filterDirection) filterDirection.addEventListener("change", applyStatsFilters);
+    if (filterQuality)   filterQuality.addEventListener("change",   applyStatsFilters);
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        if (filterTopic)     filterTopic.value     = "";
+        if (filterDiet)      filterDiet.value      = "";
+        if (filterDirection) filterDirection.value = "";
+        if (filterQuality)   filterQuality.value   = "";
+        applyStatsFilters();
+      });
+    }
+
+    // Initial count
+    if (resultsCount) {
+      resultsCount.textContent = "Showing " + totalCount + " of " + totalCount + " statistics";
+    }
+  }
+
   /* ── Init ────────────────────────────────────────────────── */
   document.addEventListener("DOMContentLoaded", function () {
     initCollapsibles();
     initAbstractToggles();
     initDatabasePage();
+    initStatsPage();
   });
 
 })();

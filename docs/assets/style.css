@@ -610,6 +610,164 @@ main { min-height: calc(100vh - 120px); }
   line-height: 1.6;
 }
 
+/* ── Stat of the Day ─────────────────────────────────────── */
+.stat-of-day-section {
+  padding: 1.5rem 1.5rem 0;
+}
+
+.stat-of-day-box {
+  background: #eaf4ea;
+  border-left: 4px solid #2d6a4f;
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 0;
+}
+
+.stat-of-day-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #2d6a4f;
+  margin-bottom: 0.6rem;
+}
+
+.stat-of-day-text {
+  font-size: 1.05rem;
+  font-style: italic;
+  color: var(--color-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.stat-of-day-meta {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.view-all-stats-link {
+  font-weight: 600;
+  color: #2d6a4f;
+}
+.view-all-stats-link:hover { text-decoration: underline; }
+
+/* ── Stats page ──────────────────────────────────────────── */
+.stats-page-hero {
+  margin-bottom: 1.5rem;
+}
+
+.hero-subtitle-inline {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  margin-top: 0.4rem;
+}
+
+.stats-filter-panel {
+  margin-bottom: 1rem;
+}
+
+.stats-list-section {
+  margin-bottom: 2.5rem;
+}
+
+.stats-list-section h2 {
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+/* ── Stat cards ──────────────────────────────────────────── */
+.stat-card {
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  background: var(--color-bg);
+}
+.stat-card.tier-1 { border-left-color: var(--tier1); }
+.stat-card.tier-2 { border-left-color: var(--tier2); }
+.stat-card.tier-3 { border-left-color: var(--tier3); }
+.stat-card.tier-4 { border-left-color: var(--tier4); }
+.stat-card.tier-5 { border-left-color: var(--tier5); }
+.stat-card.hidden { display: none; }
+
+.stat-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-sentence {
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--color-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.stat-ci {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.stat-meta {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.contested-badge {
+  background: #fff3cd;
+  color: #856404;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.null-finding-badge {
+  background: #e9ecef;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.copy-btn {
+  font-size: 0.8rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--color-accent);
+  font-family: var(--font);
+  transition: background var(--transition);
+}
+.copy-btn:hover { background: var(--color-bg-light); }
+
+.no-stats-msg {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 1rem 0;
+}
+
+.topic-stats-section {
+  margin-bottom: 2rem;
+  padding-top: 0.5rem;
+}
+.topic-stats-section h2 {
+  margin-bottom: 1rem;
+}
+
 /* ── Footer ──────────────────────────────────────────────── */
 footer {
   background: var(--color-nav);

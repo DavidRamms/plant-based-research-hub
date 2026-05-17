@@ -10,7 +10,7 @@ from pathlib import Path
 from jinja2 import Environment, BaseLoader
 
 from config import TOPICS
-from database import get_all_studies, get_summary, get_study_count
+from database import get_all_studies, get_summary, get_study_count, get_all_stats, get_top_stats, get_stats
 
 # ---------------------------------------------------------------------------
 # Jinja2 templates
@@ -32,6 +32,7 @@ BASE_HTML = """<!DOCTYPE html>
         <li><a href="{{ root_prefix }}index.html">Home</a></li>
         <li><a href="{{ root_prefix }}topics/index.html">Topics</a></li>
         <li><a href="{{ root_prefix }}database/index.html">Database</a></li>
+        <li><a href="{{ root_prefix }}stats/index.html">Key Statistics</a></li>
         <li><a href="{{ root_prefix }}about/index.html">About</a></li>
       </ul>
     </div>
@@ -61,6 +62,34 @@ INDEX_TEMPLATE = """{% extends "base.html" %}
     <p class="hero-meta">{{ total_studies }} studies tracked across {{ topic_count }} topics &mdash; last updated {{ last_updated }}</p>
   </div>
 </section>
+
+{% if stat_of_day %}
+<section class="container stat-of-day-section">
+  <div class="stat-of-day-box">
+    <div class="stat-of-day-label">&#8212;&#8212; Stat of the Day &#8212;&#8212;</div>
+    <p class="stat-of-day-text">&#x1F4A1; &ldquo;{{ stat_of_day.stat_sentence }}&rdquo;</p>
+    <div class="stat-of-day-meta">
+      &mdash; {{ stat_of_day.authors or "Unknown" }}{% if stat_of_day.year %}, {{ stat_of_day.year }}{% endif %}
+      &middot;
+      {% if stat_of_day.quality_tier == 1 %}Meta-analysis
+      {% elif stat_of_day.quality_tier == 2 %}RCT
+      {% elif stat_of_day.quality_tier == 3 %}Cohort
+      {% elif stat_of_day.quality_tier == 4 %}Cross-Sectional
+      {% else %}Study{% endif %}
+      &nbsp;
+      <button class="copy-btn"
+        data-copy-sentence="{{ stat_of_day.stat_sentence | e }}"
+        data-copy-authors="{{ (stat_of_day.authors or '') | e }}"
+        data-copy-year="{{ stat_of_day.year or '' }}"
+        data-copy-study-type="{{ (stat_of_day.study_type or '') | e }}"
+        data-copy-pmid="{{ stat_of_day.pmid or '' }}"
+        onclick="copyStatCitation(this)">&#x1F4CB; Copy</button>
+      &nbsp;
+      <a href="{{ root_prefix }}stats/index.html" class="view-all-stats-link">View all stats &rarr;</a>
+    </div>
+  </div>
+</section>
+{% endif %}
 
 <section class="topics-section container">
   <h2>Research Topics</h2>
@@ -205,6 +234,53 @@ TOPIC_PAGE_TEMPLATE = """{% extends "base.html" %}
   <div class="info-box">
     <p>No summary has been generated for this topic yet. Check back after the next daily update.</p>
   </div>
+  {% endif %}
+
+  {% if topic_stats %}
+  <section class="topic-stats-section">
+    <h2>Key Statistics</h2>
+    {% for stat in topic_stats %}
+    <div class="stat-card tier-{{ stat.quality_tier }}">
+      <div class="stat-card-header">
+        <span class="quality-badge tier-{{ stat.quality_tier }}">
+          {% if stat.quality_tier == 1 %}Meta-analysis
+          {% elif stat.quality_tier == 2 %}RCT
+          {% elif stat.quality_tier == 3 %}Cohort
+          {% elif stat.quality_tier == 4 %}Cross-Sectional
+          {% else %}Study{% endif %}
+        </span>
+        {% if stat.is_contested %}<span class="contested-badge">&#9888; Conflicting evidence</span>{% endif %}
+      </div>
+      <p class="stat-sentence">&ldquo;{{ stat.stat_sentence }}&rdquo;</p>
+      {% if stat.original_quote %}
+      <div class="stat-quote-toggle">
+        <button class="abstract-btn" data-target="stat-quote-{{ stat.id }}">Show original quote</button>
+        <div class="abstract-content" id="stat-quote-{{ stat.id }}" style="display:none;">
+          <p>{{ stat.original_quote }}</p>
+        </div>
+      </div>
+      {% endif %}
+      {% if stat.confidence_interval %}<p class="stat-ci">CI: {{ stat.confidence_interval }}</p>{% endif %}
+      <p class="stat-meta">
+        {{ stat.authors or "Unknown" }}{% if stat.year %}, {{ stat.year }}{% endif %}
+        &middot;
+        {% if stat.quality_tier == 1 %}meta-analysis
+        {% elif stat.quality_tier == 2 %}RCT
+        {% elif stat.quality_tier == 3 %}cohort
+        {% elif stat.quality_tier == 4 %}cross-sectional
+        {% else %}study{% endif %}
+        &middot; {{ topic_name }}
+      </p>
+      <button class="copy-btn"
+        data-copy-sentence="{{ stat.stat_sentence | e }}"
+        data-copy-authors="{{ (stat.authors or '') | e }}"
+        data-copy-year="{{ stat.year or '' }}"
+        data-copy-study-type="{{ (stat.study_type or '') | e }}"
+        data-copy-pmid="{{ stat.pmid or '' }}"
+        onclick="copyStatCitation(this)">&#x1F4CB; Copy citation</button>
+    </div>
+    {% endfor %}
+  </section>
   {% endif %}
 
   <section class="studies-section">
@@ -468,6 +544,175 @@ ABOUT_TEMPLATE = """{% extends "base.html" %}
 """
 
 
+STATS_PAGE_TEMPLATE = """{% extends "base.html" %}
+{% block title %}Key Statistics — Plant-Based Research Hub{% endblock %}
+{% block content %}
+<div class="container page-container">
+  <div class="stats-page-hero">
+    <h1>Key Statistics</h1>
+    <p class="hero-subtitle-inline">Specific quantitative findings extracted from peer-reviewed studies. Click any stat to copy a shareable citation.</p>
+  </div>
+
+  <div class="filter-panel stats-filter-panel">
+    <div class="filter-group">
+      <label for="stats-filter-topic">Topic</label>
+      <select id="stats-filter-topic">
+        <option value="">All Topics</option>
+        {% for key, config in topics.items() %}
+        <option value="{{ key }}">{{ config.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="stats-filter-diet">Diet Type</label>
+      <select id="stats-filter-diet">
+        <option value="">All</option>
+        <option value="vegan">Vegan</option>
+        <option value="vegetarian">Vegetarian</option>
+        <option value="plant-based">Plant-based</option>
+        <option value="meat-free">Meat-free</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="stats-filter-direction">Direction</label>
+      <select id="stats-filter-direction">
+        <option value="">All</option>
+        <option value="reduction">Reductions only</option>
+        <option value="increase">Increases only</option>
+        <option value="null">Null findings</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="stats-filter-quality">Study Quality</label>
+      <select id="stats-filter-quality">
+        <option value="">All</option>
+        <option value="highonly">Meta-analyses &amp; RCTs only</option>
+      </select>
+    </div>
+    <div class="filter-group filter-actions">
+      <button id="stats-clear-filters" class="btn-secondary">Clear Filters</button>
+    </div>
+  </div>
+
+  <p class="results-count" id="stats-results-count">Showing {{ non_null_stats|length }} of {{ total_stats_count }} statistics</p>
+
+  <section class="stats-list-section" id="stats-key-findings">
+    <h2>Key Findings</h2>
+    {% if non_null_stats %}
+    {% for stat in non_null_stats %}
+    <div class="stat-card tier-{{ stat.quality_tier }}"
+         data-topic="{{ stat.topic }}"
+         data-diet="{{ stat.diet_type }}"
+         data-direction="{{ stat.direction }}"
+         data-tier="{{ stat.quality_tier }}">
+      <div class="stat-card-header">
+        <span class="quality-badge tier-{{ stat.quality_tier }}">
+          {% if stat.quality_tier == 1 %}Meta-analysis
+          {% elif stat.quality_tier == 2 %}RCT
+          {% elif stat.quality_tier == 3 %}Cohort
+          {% elif stat.quality_tier == 4 %}Cross-Sectional
+          {% else %}Study{% endif %}
+        </span>
+        {% if stat.is_contested %}<span class="contested-badge">&#9888; Conflicting evidence</span>{% endif %}
+      </div>
+      <p class="stat-sentence">&ldquo;{{ stat.stat_sentence }}&rdquo;</p>
+      {% if stat.original_quote %}
+      <div class="stat-quote-toggle">
+        <button class="abstract-btn" data-target="stat-quote-{{ stat.id }}">Show original quote</button>
+        <div class="abstract-content" id="stat-quote-{{ stat.id }}" style="display:none;">
+          <p>{{ stat.original_quote }}</p>
+        </div>
+      </div>
+      {% endif %}
+      {% if stat.confidence_interval %}<p class="stat-ci">CI: {{ stat.confidence_interval }}</p>{% endif %}
+      <p class="stat-meta">
+        {{ stat.authors or "Unknown" }}{% if stat.year %}, {{ stat.year }}{% endif %}
+        &middot;
+        {% if stat.quality_tier == 1 %}meta-analysis
+        {% elif stat.quality_tier == 2 %}RCT
+        {% elif stat.quality_tier == 3 %}cohort
+        {% elif stat.quality_tier == 4 %}cross-sectional
+        {% else %}study{% endif %}
+        &middot; {{ topics.get(stat.topic, {}).get('name', stat.topic) }}
+      </p>
+      <button class="copy-btn"
+        data-copy-sentence="{{ stat.stat_sentence | e }}"
+        data-copy-authors="{{ (stat.authors or '') | e }}"
+        data-copy-year="{{ stat.year or '' }}"
+        data-copy-study-type="{{ (stat.study_type or '') | e }}"
+        data-copy-pmid="{{ stat.pmid or '' }}"
+        onclick="copyStatCitation(this)">&#x1F4CB; Copy citation</button>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="no-stats-msg">No statistics available yet. Run the pipeline with a Groq API key to extract statistics.</p>
+    {% endif %}
+  </section>
+
+  {% if null_stats %}
+  <section class="stats-list-section" id="stats-null-findings">
+    <div class="collapsible-section" data-open="false">
+      <button class="section-toggle">
+        <span class="section-title">Null Findings ({{ null_stats|length }})</span>
+        <span class="toggle-icon">&#9660;</span>
+      </button>
+      <div class="section-content">
+        {% for stat in null_stats %}
+        <div class="stat-card tier-{{ stat.quality_tier }}"
+             data-topic="{{ stat.topic }}"
+             data-diet="{{ stat.diet_type }}"
+             data-direction="{{ stat.direction }}"
+             data-tier="{{ stat.quality_tier }}">
+          <div class="stat-card-header">
+            <span class="quality-badge tier-{{ stat.quality_tier }}">
+              {% if stat.quality_tier == 1 %}Meta-analysis
+              {% elif stat.quality_tier == 2 %}RCT
+              {% elif stat.quality_tier == 3 %}Cohort
+              {% elif stat.quality_tier == 4 %}Cross-Sectional
+              {% else %}Study{% endif %}
+            </span>
+            <span class="null-finding-badge">Null finding</span>
+          </div>
+          <p class="stat-sentence">&ldquo;{{ stat.stat_sentence }}&rdquo;</p>
+          {% if stat.original_quote %}
+          <div class="stat-quote-toggle">
+            <button class="abstract-btn" data-target="stat-quote-{{ stat.id }}">Show original quote</button>
+            <div class="abstract-content" id="stat-quote-{{ stat.id }}" style="display:none;">
+              <p>{{ stat.original_quote }}</p>
+            </div>
+          </div>
+          {% endif %}
+          {% if stat.confidence_interval %}<p class="stat-ci">CI: {{ stat.confidence_interval }}</p>{% endif %}
+          <p class="stat-meta">
+            {{ stat.authors or "Unknown" }}{% if stat.year %}, {{ stat.year }}{% endif %}
+            &middot;
+            {% if stat.quality_tier == 1 %}meta-analysis
+            {% elif stat.quality_tier == 2 %}RCT
+            {% elif stat.quality_tier == 3 %}cohort
+            {% elif stat.quality_tier == 4 %}cross-sectional
+            {% else %}study{% endif %}
+            &middot; {{ topics.get(stat.topic, {}).get('name', stat.topic) }}
+          </p>
+          <button class="copy-btn"
+            data-copy-sentence="{{ stat.stat_sentence | e }}"
+            data-copy-authors="{{ (stat.authors or '') | e }}"
+            data-copy-year="{{ stat.year or '' }}"
+            data-copy-study-type="{{ (stat.study_type or '') | e }}"
+            data-copy-pmid="{{ stat.pmid or '' }}"
+            onclick="copyStatCitation(this)">&#x1F4CB; Copy citation</button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}
+"""
+
+
 # ---------------------------------------------------------------------------
 # Builder
 # ---------------------------------------------------------------------------
@@ -485,6 +730,7 @@ def _make_env() -> Environment:
         "topic_page.html": TOPIC_PAGE_TEMPLATE,
         "database.html": DATABASE_TEMPLATE,
         "about.html": ABOUT_TEMPLATE,
+        "stats.html": STATS_PAGE_TEMPLATE,
     }
 
     # Patch the loader to serve our inline templates
@@ -550,6 +796,13 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
             "summary": consensus_text,
         })
 
+    # Compute Stat of the Day
+    top_stats = get_top_stats(conn, n=20)
+    stat_of_day = None
+    if top_stats:
+        today_date = datetime.utcnow().date()
+        stat_of_day = top_stats[hash(str(today_date)) % len(top_stats)]
+
     # ------------------------------------------------------------------
     # 1. Homepage: docs/index.html
     # ------------------------------------------------------------------
@@ -559,6 +812,7 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
         topic_count=len(TOPICS),
         total_studies=total_studies,
         last_updated=last_updated,
+        stat_of_day=stat_of_day,
         root_prefix="",
         assets_prefix="",
     )
@@ -601,6 +855,10 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
 
         last_upd = summary_row["last_updated"][:10] if summary_row and summary_row.get("last_updated") else None
 
+        # Get non-null stats for this topic
+        topic_stats = get_stats(conn, topic=topic_key, direction=None)
+        topic_stats_non_null = [s for s in topic_stats if s.get("direction") != "null"]
+
         html = tmpl.render(
             topic_name=cfg["name"],
             topic_description=cfg["description"],
@@ -611,6 +869,7 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
             no_rct_warning=show_warning,
             summary=summary_row,
             studies=topic_studies,
+            topic_stats=topic_stats_non_null,
             root_prefix="../../",
             assets_prefix="../../",
         )
@@ -636,7 +895,31 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
     print(f"  Built: docs/database/index.html")
 
     # ------------------------------------------------------------------
-    # 5. About page: docs/about/index.html
+    # 5. Stats page: docs/stats/index.html
+    # ------------------------------------------------------------------
+    stats_dir = docs_path / "stats"
+    stats_dir.mkdir(exist_ok=True)
+
+    all_stats = get_all_stats(conn)
+    non_null_stats = [s for s in all_stats if s.get("direction") != "null"]
+    null_stats = [s for s in all_stats if s.get("direction") == "null"]
+    total_stats_count = len(all_stats)
+
+    tmpl = env.get_template("stats.html")
+    html = tmpl.render(
+        non_null_stats=non_null_stats,
+        null_stats=null_stats,
+        total_stats_count=total_stats_count,
+        topics=TOPICS,
+        last_updated=last_updated,
+        root_prefix="../",
+        assets_prefix="../",
+    )
+    (stats_dir / "index.html").write_text(html, encoding="utf-8")
+    print(f"  Built: docs/stats/index.html ({total_stats_count} stats)")
+
+    # ------------------------------------------------------------------
+    # 6. About page: docs/about/index.html
     # ------------------------------------------------------------------
     about_dir = docs_path / "about"
     about_dir.mkdir(exist_ok=True)
@@ -651,7 +934,7 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
     print(f"  Built: docs/about/index.html")
 
     # ------------------------------------------------------------------
-    # 6. Search index: docs/search-index.json
+    # 8. Search index: docs/search-index.json
     # ------------------------------------------------------------------
     search_index = []
     for study in all_studies:
@@ -671,7 +954,7 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
     print(f"  Built: docs/search-index.json ({len(search_index)} entries)")
 
     # ------------------------------------------------------------------
-    # 7. Assets (CSS + JS)
+    # 9. Assets (CSS + JS)
     # ------------------------------------------------------------------
     assets_dir = docs_path / "assets"
     assets_dir.mkdir(exist_ok=True)
