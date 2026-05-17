@@ -10,7 +10,7 @@ from pathlib import Path
 from jinja2 import Environment, BaseLoader
 
 from config import TOPICS
-from database import get_all_studies, get_summary, get_study_count, get_all_stats, get_top_stats, get_stats
+from database import get_all_studies, get_summary, get_study_count, get_all_stats, get_top_stats, get_stats, get_all_contested, get_contested_studies
 
 # ---------------------------------------------------------------------------
 # Jinja2 templates
@@ -33,6 +33,7 @@ BASE_HTML = """<!DOCTYPE html>
         <li><a href="{{ root_prefix }}topics/index.html">Topics</a></li>
         <li><a href="{{ root_prefix }}database/index.html">Database</a></li>
         <li><a href="{{ root_prefix }}stats/index.html">Key Statistics</a></li>
+        <li><a href="{{ root_prefix }}contested/index.html">Contested Claims</a></li>
         <li><a href="{{ root_prefix }}about/index.html">About</a></li>
       </ul>
     </div>
@@ -750,6 +751,131 @@ STATS_PAGE_TEMPLATE = """{% extends "base.html" %}
 """
 
 
+CONTESTED_PAGE_TEMPLATE = """{% extends "base.html" %}
+{% block title %}Contested Claims — Plant-Based Research Hub{% endblock %}
+{% block content %}
+<div class="container page-container">
+  <div class="stats-page-hero">
+    <h1>Contested Claims</h1>
+    <p class="hero-subtitle-inline">Studies reporting negative findings or meat-positive health benefits &mdash; with methodological context, known limitations, and what the broader evidence says.</p>
+  </div>
+
+  <div class="filter-panel stats-filter-panel">
+    <div class="filter-group">
+      <label for="contested-filter-topic">Topic</label>
+      <select id="contested-filter-topic">
+        <option value="">All Topics</option>
+        {% for key, config in topics.items() %}
+        <option value="{{ key }}">{{ config.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="contested-filter-type">Claim Type</label>
+      <select id="contested-filter-type">
+        <option value="">All</option>
+        <option value="negative">Negative findings</option>
+        <option value="meat_positive">Meat-positive</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="contested-filter-counter">Counter-Evidence</label>
+      <select id="contested-filter-counter">
+        <option value="">All</option>
+        <option value="1">Has counter-evidence</option>
+        <option value="0">No counter-evidence</option>
+      </select>
+    </div>
+    <div class="filter-group filter-actions">
+      <button id="contested-clear-filters" class="btn-secondary">Clear Filters</button>
+    </div>
+  </div>
+
+  <p class="results-count" id="contested-results-count">Showing {{ contested_studies|length }} of {{ contested_studies|length }} contested studies</p>
+
+  {% if contested_studies %}
+  <div id="contested-cards-list">
+  {% for study in contested_studies %}
+  <div class="contested-card {{ 'negative' if study.claim_type == 'negative' else 'meat-positive' }}"
+       data-topic="{{ study.topic }}"
+       data-claim-type="{{ study.claim_type }}"
+       data-has-counter="{{ '1' if study.counter_evidence_exists else '0' }}">
+
+    <div class="study-card-header">
+      {% if study.claim_type == 'negative' %}
+      <span class="claim-type-badge negative">&#9888; Negative Finding</span>
+      {% else %}
+      <span class="claim-type-badge meat-positive">&#127830; Meat-Positive</span>
+      {% endif %}
+      {% if study.quality_tier %}
+      <span class="quality-badge tier-{{ study.quality_tier }}">
+        {% if study.quality_tier == 1 %}Meta-Analysis
+        {% elif study.quality_tier == 2 %}RCT
+        {% elif study.quality_tier == 3 %}Cohort
+        {% elif study.quality_tier == 4 %}Cross-Sectional
+        {% else %}Study{% endif %}
+      </span>
+      {% endif %}
+      <span class="study-year">{{ study.pub_year or "N/A" }}</span>
+      <span class="topic-tag">{{ topics.get(study.topic, {}).get('name', study.topic) }}</span>
+    </div>
+
+    {% if study.industry_funding %}
+    <div class="industry-funding-banner">
+      &#9888; Industry Funding: {{ study.industry_funding }}
+    </div>
+    {% endif %}
+
+    {% if study.title %}
+    <h3 class="study-title">
+      <a href="{{ study.pubmed_url }}" target="_blank" rel="noopener">{{ study.title }}</a>
+    </h3>
+    {% endif %}
+    <p class="study-meta">
+      {{ study.authors or "Authors unknown" }}
+      {% if study.journal %} &mdash; <em>{{ study.journal }}</em>{% endif %}
+      {% if study.pub_year %}, {{ study.pub_year }}{% endif %}
+      &mdash; <a href="{{ study.pubmed_url }}" target="_blank" rel="noopener">PMID {{ study.pmid }}</a>
+    </p>
+
+    {% if study.claim_summary %}
+    <div class="contested-section-label">WHAT THIS STUDY CLAIMS</div>
+    <p class="contested-claim-summary">{{ study.claim_summary }}</p>
+    {% endif %}
+
+    {% if study.study_limitations %}
+    <div class="contested-section-label">LIMITATIONS</div>
+    <p class="contested-claim-summary">{{ study.study_limitations }}</p>
+    {% endif %}
+
+    <div class="counter-evidence-section">
+      <h4>WHAT THE BROADER EVIDENCE SAYS</h4>
+      {% if study.counter_evidence_exists %}
+        <p>{{ study.counter_response }}</p>
+        {% if study.contradicting_studies %}
+        <p style="margin-top:0.5rem; font-size:0.85rem; font-weight:600;">Contradicted by:</p>
+        <ul class="contradicting-links">
+          {% for cs in study.contradicting_studies %}
+          <li><a href="{{ cs.pubmed_url }}" target="_blank" rel="noopener">{{ cs.title }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      {% else %}
+        <p class="no-counter-notice">This claim is not currently contradicted by stronger evidence in our database. Treat with appropriate caution given the limitations above.</p>
+      {% endif %}
+    </div>
+
+  </div>
+  {% endfor %}
+  </div>
+  {% else %}
+  <p class="no-stats-msg">No contested claims have been extracted yet. Run the pipeline with a Groq API key to extract contested claims.</p>
+  {% endif %}
+</div>
+{% endblock %}
+"""
+
+
 # ---------------------------------------------------------------------------
 # Builder
 # ---------------------------------------------------------------------------
@@ -770,6 +896,7 @@ def _make_env() -> Environment:
         "database.html": DATABASE_TEMPLATE,
         "about.html": ABOUT_TEMPLATE,
         "stats.html": STATS_PAGE_TEMPLATE,
+        "contested.html": CONTESTED_PAGE_TEMPLATE,
     }
 
     # Patch the loader to serve our inline templates
@@ -971,6 +1098,54 @@ def build_static_site(conn: sqlite3.Connection, docs_path: Path) -> None:
     )
     (about_dir / "index.html").write_text(html, encoding="utf-8")
     print(f"  Built: docs/about/index.html")
+
+    # ------------------------------------------------------------------
+    # 7. Contested claims page: docs/contested/index.html
+    # ------------------------------------------------------------------
+    contested_dir = docs_path / "contested"
+    contested_dir.mkdir(exist_ok=True)
+
+    raw_contested = get_all_contested(conn)
+
+    # Build a PMID→study lookup for resolving contradicting_pmids to titles/URLs
+    pmid_to_study: dict[str, dict] = {s["pmid"]: s for s in all_studies}
+
+    # Enrich each contested record with contradicting study objects
+    contested_enriched = []
+    for item in raw_contested:
+        item = dict(item)
+        contradicting_pmids = item.get("contradicting_pmids") or []
+        contradicting_studies = []
+        for cpmid in contradicting_pmids:
+            study = pmid_to_study.get(str(cpmid))
+            if study:
+                contradicting_studies.append({
+                    "pmid": study["pmid"],
+                    "title": study.get("title", f"PMID {cpmid}"),
+                    "pubmed_url": study.get("pubmed_url", f"https://pubmed.ncbi.nlm.nih.gov/{cpmid}/"),
+                })
+            else:
+                contradicting_studies.append({
+                    "pmid": cpmid,
+                    "title": f"PMID {cpmid}",
+                    "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{cpmid}/",
+                })
+        item["contradicting_studies"] = contradicting_studies
+        # Ensure pubmed_url falls back gracefully if study not in DB
+        if not item.get("pubmed_url"):
+            item["pubmed_url"] = f"https://pubmed.ncbi.nlm.nih.gov/{item['pmid']}/"
+        contested_enriched.append(item)
+
+    tmpl = env.get_template("contested.html")
+    html = tmpl.render(
+        contested_studies=contested_enriched,
+        topics=TOPICS,
+        last_updated=last_updated,
+        root_prefix="../",
+        assets_prefix="../",
+    )
+    (contested_dir / "index.html").write_text(html, encoding="utf-8")
+    print(f"  Built: docs/contested/index.html ({len(contested_enriched)} contested studies)")
 
     # ------------------------------------------------------------------
     # 8. Search index: docs/search-index.json

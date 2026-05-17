@@ -75,6 +75,21 @@ def init_db(conn: sqlite3.Connection) -> None:
             confidence_interval TEXT,
             date_extracted TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS contested_studies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pmid TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            claim_type TEXT NOT NULL,
+            claim_summary TEXT,
+            study_limitations TEXT,
+            industry_funding TEXT,
+            counter_evidence_exists INTEGER DEFAULT 0,
+            counter_response TEXT,
+            contradicting_pmids TEXT,
+            date_extracted TEXT,
+            UNIQUE(pmid, topic)
+        );
     """)
     conn.commit()
 
@@ -327,3 +342,89 @@ def get_all_stats(conn: sqlite3.Connection) -> list[dict]:
     """Return all stats ordered by quality_tier ASC, year DESC."""
     cursor = conn.execute("SELECT * FROM stats ORDER BY quality_tier ASC, year DESC")
     return [dict(row) for row in cursor.fetchall()]
+
+
+def insert_contested_for_topic(
+    conn: sqlite3.Connection,
+    topic: str,
+    contested_list: list[dict],
+) -> None:
+    """Delete existing contested studies for topic and insert the new list."""
+    today = datetime.utcnow().date().isoformat()
+    conn.execute("DELETE FROM contested_studies WHERE topic = ?", (topic,))
+    for item in contested_list:
+        contradicting = item.get("contradicting_pmids")
+        if isinstance(contradicting, list):
+            contradicting = json.dumps(contradicting)
+        conn.execute("""
+            INSERT OR REPLACE INTO contested_studies (
+                pmid, topic, claim_type, claim_summary, study_limitations,
+                industry_funding, counter_evidence_exists, counter_response,
+                contradicting_pmids, date_extracted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            item.get("pmid", ""),
+            topic,
+            item.get("claim_type", "negative"),
+            item.get("claim_summary"),
+            item.get("study_limitations"),
+            item.get("industry_funding"),
+            1 if item.get("counter_evidence_exists") else 0,
+            item.get("counter_response"),
+            contradicting,
+            today,
+        ))
+    conn.commit()
+
+
+def get_contested_studies(conn: sqlite3.Connection, topic: str | None = None) -> list[dict]:
+    """Return contested studies joined with the studies table.
+
+    Ordered by claim_type then year DESC.
+    If topic is provided, filter to that topic only.
+    """
+    query = """
+        SELECT
+            cs.id,
+            cs.pmid,
+            cs.topic,
+            cs.claim_type,
+            cs.claim_summary,
+            cs.study_limitations,
+            cs.industry_funding,
+            cs.counter_evidence_exists,
+            cs.counter_response,
+            cs.contradicting_pmids,
+            cs.date_extracted,
+            s.title,
+            s.authors,
+            s.pub_year,
+            s.journal,
+            s.study_type,
+            s.quality_tier,
+            s.pubmed_url
+        FROM contested_studies cs
+        LEFT JOIN studies s ON cs.pmid = s.pmid
+        WHERE 1=1
+    """
+    params: list = []
+    if topic is not None:
+        query += " AND cs.topic = ?"
+        params.append(topic)
+    query += " ORDER BY cs.claim_type ASC, s.pub_year DESC"
+    cursor = conn.execute(query, params)
+    rows = cursor.fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        try:
+            d["contradicting_pmids"] = json.loads(d["contradicting_pmids"]) if d["contradicting_pmids"] else []
+        except (json.JSONDecodeError, TypeError):
+            d["contradicting_pmids"] = []
+        result.append(d)
+    return result
+
+
+def get_all_contested(conn: sqlite3.Connection) -> list[dict]:
+    """Return all contested studies with study details, ordered by claim_type then year DESC."""
+    return get_contested_studies(conn, topic=None)

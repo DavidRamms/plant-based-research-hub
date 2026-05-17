@@ -98,6 +98,19 @@ def main() -> None:
         extract_stats_for_all_topics(conn, topics_with_new, force_all=force_stats)
 
     # ------------------------------------------------------------------
+    # Step 2c: Extract contested claims
+    # ------------------------------------------------------------------
+    print("\nStep 2c: Extracting contested claims...")
+    if not os.getenv("GROQ_API_KEY"):
+        print("  WARNING: GROQ_API_KEY not set, skipping contested extraction")
+    else:
+        from generate_summaries import extract_contested_for_all_topics
+        from database import get_all_contested
+        contested_bootstrap = len(get_all_contested(conn)) == 0
+        force_contested = force_resynthesis or contested_bootstrap
+        extract_contested_for_all_topics(conn, topics_with_new, force_all=force_contested)
+
+    # ------------------------------------------------------------------
     # Step 3: Build static site
     # ------------------------------------------------------------------
     print("\nStep 3: Building static site...")

@@ -402,6 +402,63 @@
     applyStatsFilters();
   }
 
+  /* ── Contested Claims page ──────────────────────────────── */
+  function initContestedPage() {
+    var cardsList = document.getElementById("contested-cards-list");
+    if (!cardsList) return;
+
+    var filterTopic   = document.getElementById("contested-filter-topic");
+    var filterType    = document.getElementById("contested-filter-type");
+    var filterCounter = document.getElementById("contested-filter-counter");
+    var clearBtn      = document.getElementById("contested-clear-filters");
+    var resultsCount  = document.getElementById("contested-results-count");
+
+    var allCards = Array.from(cardsList.querySelectorAll(".contested-card"));
+    var totalCount = allCards.length;
+
+    function applyContestedFilters() {
+      var topicVal   = filterTopic   ? filterTopic.value   : "";
+      var typeVal    = filterType    ? filterType.value    : "";
+      var counterVal = filterCounter ? filterCounter.value : "";
+
+      var visibleCount = 0;
+
+      allCards.forEach(function (card) {
+        var cardTopic   = card.dataset.topic      || "";
+        var cardType    = card.dataset.claimType  || "";
+        var cardCounter = card.dataset.hasCounter || "";
+
+        var passTopic   = !topicVal   || cardTopic === topicVal;
+        var passType    = !typeVal    || cardType === typeVal;
+        var passCounter = !counterVal || cardCounter === counterVal;
+
+        var visible = passTopic && passType && passCounter;
+        card.classList.toggle("hidden", !visible);
+        if (visible) visibleCount++;
+      });
+
+      if (resultsCount) {
+        resultsCount.textContent = "Showing " + visibleCount + " of " + totalCount + " contested studies";
+      }
+    }
+
+    if (filterTopic)   filterTopic.addEventListener("change",   applyContestedFilters);
+    if (filterType)    filterType.addEventListener("change",    applyContestedFilters);
+    if (filterCounter) filterCounter.addEventListener("change", applyContestedFilters);
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        if (filterTopic)   filterTopic.value   = "";
+        if (filterType)    filterType.value    = "";
+        if (filterCounter) filterCounter.value = "";
+        applyContestedFilters();
+      });
+    }
+
+    // Apply on load to set initial count
+    applyContestedFilters();
+  }
+
   /* ── Init ────────────────────────────────────────────────── */
   document.addEventListener("DOMContentLoaded", function () {
     initCollapsibles();
@@ -409,6 +466,7 @@
     initDatabasePage();
     initTopicSort();
     initStatsPage();
+    initContestedPage();
   });
 
 })();

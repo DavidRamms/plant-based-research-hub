@@ -17,6 +17,7 @@ from database import (
     get_study_count,
     insert_stats_for_topic,
     mark_contested_stats,
+    insert_contested_for_topic,
 )
 
 _groq_client: Groq | None = None
@@ -428,3 +429,166 @@ def extract_stats_for_all_topics(
     # Mark contested stats across all topics
     mark_contested_stats(conn)
     print("  Contested stats marked.")
+
+
+CONTESTED_SYSTEM_PROMPT = (
+    "You are a scientific analyst identifying studies that challenge plant-based or vegan diet "
+    "recommendations. You extract only what is explicitly stated in abstracts. You are scrupulously "
+    "honest — if a study is genuinely methodologically weak, you say so; if it is strong, you say so. "
+    "You never fabricate counter-evidence that doesn't exist."
+)
+
+
+def _build_contested_user_prompt(topic_key: str, topic_config: dict, studies: list[dict]) -> str:
+    """Build a prompt for contested claim extraction, truncating abstracts to 150 chars."""
+    topic_name = topic_config["name"]
+    n_studies = len(studies)
+
+    # Format studies with 150-char abstract truncation to keep tokens down
+    lines = []
+    for study in studies:
+        sample = study.get("sample_size")
+        sample_str = str(sample) if sample else "NR"
+        abstract = study.get("abstract") or ""
+        funding = study.get("funding_notes") or ""
+        block = (
+            f"[PMID: {study.get('pmid', 'N/A')}] "
+            f"[Tier {study.get('quality_tier', '?')}, {study.get('study_type', 'unknown')}, n={sample_str}] "
+            f"{study.get('pub_year', 'N/A')}\n"
+            f"Title: {study.get('title', '')}\n"
+            f"Abstract: {abstract[:150]}{'...' if len(abstract) > 150 else ''}\n"
+        )
+        if funding:
+            block += f"Funding: {funding}\n"
+        block += "---"
+        lines.append(block)
+    formatted = "\n".join(lines)
+
+    return f"""Review the following {n_studies} peer-reviewed studies on the topic: **{topic_name}**.
+
+Identify studies that meet EITHER of these criteria:
+1. **Direct negative finding**: the study reports that a plant-based, vegan, or vegetarian diet caused harm, increased disease risk, or led to worse health outcomes compared to omnivorous or meat-containing diets.
+2. **Meat-positive finding**: the study reports that consuming meat, animal protein, or animal products provided a specific health benefit.
+
+For each qualifying study, return a JSON object with these fields:
+
+{{
+  "pmid": "12345678",
+  "claim_type": "negative",
+  "claim_summary": "Plain English: what this study claims, in 1-2 sentences",
+  "study_limitations": "Comma-separated list of limitations: both those stated in the abstract AND structurally inherent ones (self-reported dietary data, healthy user bias, short follow-up, surrogate markers, limited generalisability, industry funding). Be specific.",
+  "industry_funding": "Name of funding body if meat/dairy/egg industry funded, otherwise null",
+  "counter_evidence_exists": true,
+  "counter_response": "What the broader evidence says — ONLY if higher-quality (lower tier), larger sample size, or more recent studies in the provided list contradict this finding. If no such evidence exists, set this to null and set counter_evidence_exists to false.",
+  "contradicting_pmids": ["pmid1", "pmid2"]
+}}
+
+claim_type must be "negative" or "meat_positive".
+Return JSON with key "contested" containing the array. Return empty array if no qualifying studies found.
+
+---
+STUDIES:
+
+{formatted}
+"""
+
+
+def extract_contested_for_topic(
+    topic_key: str,
+    topic_config: dict,
+    all_studies: list[dict],
+) -> list[dict]:
+    """Extract contested claims from ALL studies for a topic using the 8b model."""
+    if not all_studies:
+        return []
+
+    client = _get_client()
+    user_prompt = _build_contested_user_prompt(topic_key, topic_config, all_studies)
+
+    messages = [
+        {"role": "system", "content": CONTESTED_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    response = client.chat.completions.create(
+        model=GROQ_STATS_MODEL,
+        messages=messages,
+        temperature=0.1,
+        max_tokens=4096,
+        response_format={"type": "json_object"},
+    )
+    raw_text = response.choices[0].message.content or ""
+    result = _parse_json_response(raw_text)
+
+    if result is None or "contested" not in result:
+        print(f"    [WARN] Contested JSON parse failed for {topic_key}, retrying...")
+        messages.append({"role": "assistant", "content": raw_text})
+        messages.append({
+            "role": "user",
+            "content": (
+                "Your previous response could not be parsed. "
+                "Please respond ONLY with a valid JSON object containing exactly one key: "
+                "\"contested\" whose value is an array of contested study objects. "
+                "No markdown, no code blocks, no extra text."
+            ),
+        })
+        retry_response = client.chat.completions.create(
+            model=GROQ_STATS_MODEL,
+            messages=messages,
+            temperature=0.1,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
+        )
+        raw_text = retry_response.choices[0].message.content or ""
+        result = _parse_json_response(raw_text)
+
+    if result is None or "contested" not in result:
+        print(f"    [ERROR] Could not parse contested JSON for {topic_key}, returning empty list.")
+        return []
+
+    contested_list = result["contested"]
+    if not isinstance(contested_list, list):
+        return []
+    return contested_list
+
+
+def extract_contested_for_all_topics(
+    conn: sqlite3.Connection,
+    topics_to_update: list[str],
+    force_all: bool = False,
+) -> None:
+    """Extract and store contested claims for topics that need updating."""
+    if force_all:
+        topics = list(TOPICS.keys())
+        print(f"  Force-extracting contested claims for all {len(topics)} topics...")
+    else:
+        topics = topics_to_update
+        print(f"  Extracting contested claims for {len(topics)} topics with new studies...")
+
+    for topic_key in topics:
+        topic_config = TOPICS.get(topic_key)
+        if topic_config is None:
+            print(f"  [WARN] Unknown topic key: {topic_key}")
+            continue
+
+        print(f"  Extracting contested claims for: {topic_config['name']}")
+
+        # Use ALL studies for this topic (all tiers, no cap) so the model
+        # has the full picture to find counter-evidence
+        all_studies = get_studies_for_topic(conn, topic_key, min_quality_tier=5)
+
+        if not all_studies:
+            print(f"    No studies found for {topic_key}, skipping.")
+            insert_contested_for_topic(conn, topic_key, [])
+            continue
+
+        print(f"    {len(all_studies)} studies found, sending to Groq...")
+
+        try:
+            contested = extract_contested_for_topic(topic_key, topic_config, all_studies)
+        except Exception as exc:
+            print(f"    [ERROR] Contested extraction failed for {topic_key}: {exc}")
+            continue
+
+        insert_contested_for_topic(conn, topic_key, contested)
+        print(f"    Saved {len(contested)} contested claims for {topic_key}.")
