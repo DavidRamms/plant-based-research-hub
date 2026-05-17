@@ -147,23 +147,6 @@ TOPICS = {
             ),
         ],
     },
-    "mediterranean": {
-        "name": "Mediterranean Diet",
-        "description": "Research on the Mediterranean dietary pattern (note: not fully plant-based — includes fish and some dairy).",
-        "not_fully_plant_based": True,
-        "queries": [
-            (
-                '("Mediterranean diet")'
-                ' AND ("health outcomes" OR "cardiovascular" OR "mortality" OR "cancer" OR "diabetes"'
-                ' OR "cognitive function" OR "longevity" OR "inflammation")'
-            ),
-            (
-                '("Mediterranean diet" OR "Mediterranean dietary pattern")'
-                ' AND ("plant foods" OR "olive oil" OR "legumes" OR "whole grains" OR "vegetables"'
-                ' OR "adherence" OR "dietary score")'
-            ),
-        ],
-    },
 }
 
 # Study quality tiers: lower number = higher evidence quality
