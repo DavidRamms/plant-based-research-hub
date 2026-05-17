@@ -147,22 +147,6 @@ TOPICS = {
             ),
         ],
     },
-    "environmental": {
-        "name": "Environmental Impact",
-        "description": "Life-cycle analyses and environmental research on plant-based versus animal-based food systems.",
-        "queries": [
-            (
-                '("plant-based diet" OR "vegan diet" OR "vegetarian diet" OR "whole food plant-based" OR "plant-forward")'
-                ' AND ("greenhouse gas emissions" OR "carbon footprint" OR "land use" OR "water use"'
-                ' OR "environmental impact" OR "sustainability" OR "ecological footprint" OR "biodiversity")'
-            ),
-            (
-                '("meat reduction" OR "reduced animal products" OR "dietary shift" OR "food systems")'
-                ' AND ("greenhouse gas emissions" OR "carbon footprint" OR "land use" OR "water use"'
-                ' OR "environmental impact" OR "sustainability")'
-            ),
-        ],
-    },
     "mediterranean": {
         "name": "Mediterranean Diet",
         "description": "Research on the Mediterranean dietary pattern (note: not fully plant-based — includes fish and some dairy).",
