@@ -504,17 +504,20 @@ For each qualifying study from GROUP B, return a JSON object with these fields:
 {{
   "pmid": "12345678",
   "claim_type": "negative",
-  "claim_summary": "Plain English summary of what this study claims, 1-2 sentences",
+  "claim_summary": "List every specific health claim made in this study that qualifies — include ALL outcomes mentioned (e.g. if the study claims both higher fracture risk AND lower muscle mass, include both). Do not omit any qualifying claim from the abstract.",
   "study_limitations": "Comma-separated limitations: both stated in the abstract AND structurally inherent (self-reported dietary data, healthy user bias, short follow-up, surrogate markers, limited generalisability, industry funding). Be specific.",
   "industry_funding": "Name of funding body if meat/dairy/egg industry funded, otherwise null",
   "counter_evidence_exists": true,
-  "counter_response": "Cite specific GROUP A studies by PMID and finding that directly contradict this claim. Only include if a GROUP A study clearly contradicts the contested finding. If none do, set to null.",
+  "counter_response": "For each specific claim in claim_summary, state whether a GROUP A study directly contradicts it and how. Only address outcomes that appear in claim_summary — do not bring in unrelated outcomes. If a GROUP A study contradicts a claim, cite it by PMID and state the specific finding. If no GROUP A study contradicts a particular claim, say so explicitly for that claim.",
   "contradicting_pmids": ["pmid_from_group_a"]
 }}
 
-IMPORTANT: For counter_response, only reference GROUP A studies. If any GROUP A study contradicts the contested finding — even partially — set counter_evidence_exists to true and explain how. Do not set counter_evidence_exists to false unless you have checked every GROUP A study and none contradict it.
+RULES:
+- claim_summary and counter_response must address the same set of outcomes. If counter_response mentions an outcome, it must also appear in claim_summary.
+- Only reference GROUP A studies in counter_response.
+- Set counter_evidence_exists to true if ANY claim in claim_summary is contradicted by a GROUP A study. Set to false only if none are.
+- claim_type must be "negative" or "meat_positive".
 
-claim_type must be "negative" or "meat_positive".
 Return JSON with key "contested" containing the array. Return empty array if no qualifying studies found.
 """
 
