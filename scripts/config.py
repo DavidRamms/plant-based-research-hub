@@ -190,8 +190,11 @@ GROQ_STATS_MODEL = "llama-3.1-8b-instant"
 MAX_STUDIES_PER_SUMMARY = 25
 
 # Cap for stats + contested extraction (8b model, 6k TPM on free tier).
-# 15 studies × ~150 tokens + 500 prompt + 2000 output ≈ 4,750 — safely under 6k.
-MAX_STUDIES_PER_EXTRACTION = 15
+# 10 studies × ~130 tokens + 500 prompt + 2000 output ≈ 3,800 — safely under 6k.
+MAX_STUDIES_PER_EXTRACTION = 10
+
+# Seconds to wait between 8b model calls to avoid per-minute token collisions
+EXTRACTION_CALL_DELAY = 12
 
 # Seconds between PubMed API requests to respect rate limits
 RATE_LIMIT_DELAY = 0.4

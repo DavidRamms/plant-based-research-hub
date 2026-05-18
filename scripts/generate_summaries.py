@@ -6,10 +6,11 @@ import json
 import os
 import re
 import sqlite3
+import time
 
 from groq import Groq
 
-from config import TOPICS, GROQ_MODEL, GROQ_STATS_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY, MAX_STUDIES_PER_EXTRACTION
+from config import TOPICS, GROQ_MODEL, GROQ_STATS_MODEL, MIN_QUALITY_FOR_NARRATIVE, MAX_STUDIES_PER_SUMMARY, MAX_STUDIES_PER_EXTRACTION, EXTRACTION_CALL_DELAY
 from database import (
     get_studies_for_topic,
     get_summary,
@@ -427,6 +428,7 @@ def extract_stats_for_all_topics(
 
         insert_stats_for_topic(conn, topic_key, enriched)
         print(f"    Saved {len(enriched)} stats for {topic_key}.")
+        time.sleep(EXTRACTION_CALL_DELAY)
 
     # Mark contested stats across all topics
     mark_contested_stats(conn)
@@ -596,3 +598,4 @@ def extract_contested_for_all_topics(
 
         insert_contested_for_topic(conn, topic_key, contested)
         print(f"    Saved {len(contested)} contested claims for {topic_key}.")
+        time.sleep(EXTRACTION_CALL_DELAY)
