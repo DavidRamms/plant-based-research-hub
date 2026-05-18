@@ -353,9 +353,13 @@ def insert_contested_for_topic(
     today = datetime.utcnow().date().isoformat()
     conn.execute("DELETE FROM contested_studies WHERE topic = ?", (topic,))
     for item in contested_list:
-        contradicting = item.get("contradicting_pmids")
-        if isinstance(contradicting, list):
-            contradicting = json.dumps(contradicting)
+        def _to_str(val):
+            if val is None:
+                return None
+            if isinstance(val, (dict, list)):
+                return json.dumps(val)
+            return val
+
         conn.execute("""
             INSERT OR REPLACE INTO contested_studies (
                 pmid, topic, claim_type, claim_summary, study_limitations,
@@ -366,12 +370,12 @@ def insert_contested_for_topic(
             item.get("pmid", ""),
             topic,
             item.get("claim_type", "negative"),
-            item.get("claim_summary"),
-            item.get("study_limitations"),
-            item.get("industry_funding"),
+            _to_str(item.get("claim_summary")),
+            _to_str(item.get("study_limitations")),
+            _to_str(item.get("industry_funding")),
             1 if item.get("counter_evidence_exists") else 0,
-            item.get("counter_response"),
-            contradicting,
+            _to_str(item.get("counter_response")),
+            _to_str(item.get("contradicting_pmids")),
             today,
         ))
     conn.commit()
