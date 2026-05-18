@@ -579,6 +579,22 @@ def extract_contested_for_topic(
     contested_list = result["contested"]
     if not isinstance(contested_list, list):
         return []
+
+    # Normalize any fields the model returned as dict/list into plain strings
+    def _flatten(val) -> str | None:
+        if val is None:
+            return None
+        if isinstance(val, dict):
+            # e.g. {"fracture_risk": "...", "muscle_mass": "..."} → bullet list
+            return " ".join(f"{v}" for v in val.values())
+        if isinstance(val, list):
+            return " ".join(str(v) for v in val)
+        return val
+
+    for item in contested_list:
+        for field in ("claim_summary", "study_limitations", "counter_response"):
+            item[field] = _flatten(item.get(field))
+
     return contested_list
 
 
