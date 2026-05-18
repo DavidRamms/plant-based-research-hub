@@ -443,12 +443,7 @@ CONTESTED_SYSTEM_PROMPT = (
 )
 
 
-def _build_contested_user_prompt(topic_key: str, topic_config: dict, studies: list[dict]) -> str:
-    """Build a prompt for contested claim extraction, truncating abstracts to 150 chars."""
-    topic_name = topic_config["name"]
-    n_studies = len(studies)
-
-    # Format studies with 150-char abstract truncation to keep tokens down
+def _format_studies_for_contested(studies: list[dict]) -> str:
     lines = []
     for study in studies:
         sample = study.get("sample_size")
@@ -466,48 +461,76 @@ def _build_contested_user_prompt(topic_key: str, topic_config: dict, studies: li
             block += f"Funding: {funding}\n"
         block += "---"
         lines.append(block)
-    formatted = "\n".join(lines)
+    return "\n".join(lines)
 
-    return f"""Review the following {n_studies} peer-reviewed studies on the topic: **{topic_name}**.
 
-Identify studies that meet EITHER of these criteria:
-1. **Direct negative finding**: the study reports that a plant-based, vegan, or vegetarian diet caused harm, increased disease risk, or led to worse health outcomes compared to omnivorous or meat-containing diets.
+def _build_contested_user_prompt(
+    topic_key: str,
+    topic_config: dict,
+    high_quality_studies: list[dict],
+    candidate_studies: list[dict],
+) -> str:
+    """Build contested extraction prompt with explicitly labelled counter-evidence pool."""
+    topic_name = topic_config["name"]
+
+    formatted_hq = _format_studies_for_contested(high_quality_studies)
+    formatted_candidates = _format_studies_for_contested(candidate_studies)
+
+    return f"""You are reviewing peer-reviewed research on: **{topic_name}**.
+
+You have two groups of studies:
+
+---
+## GROUP A — High-Quality Reference Studies (Tier 1-2: meta-analyses, systematic reviews, RCTs)
+These are the strongest evidence available on this topic. Use them as the counter-evidence pool.
+
+{formatted_hq}
+
+---
+## GROUP B — All Studies (any tier)
+Scan these for contested findings.
+
+{formatted_candidates}
+
+---
+## Your task
+
+Identify studies from GROUP B that meet EITHER of these criteria:
+1. **Direct negative finding**: the study reports that a plant-based, vegan, or vegetarian diet caused harm, increased disease risk, or led to worse health outcomes vs omnivorous/meat-containing diets.
 2. **Meat-positive finding**: the study reports that consuming meat, animal protein, or animal products provided a specific health benefit.
 
-For each qualifying study, return a JSON object with these fields:
+For each qualifying study from GROUP B, return a JSON object with these fields:
 
 {{
   "pmid": "12345678",
   "claim_type": "negative",
-  "claim_summary": "Plain English: what this study claims, in 1-2 sentences",
-  "study_limitations": "Comma-separated list of limitations: both those stated in the abstract AND structurally inherent ones (self-reported dietary data, healthy user bias, short follow-up, surrogate markers, limited generalisability, industry funding). Be specific.",
+  "claim_summary": "Plain English summary of what this study claims, 1-2 sentences",
+  "study_limitations": "Comma-separated limitations: both stated in the abstract AND structurally inherent (self-reported dietary data, healthy user bias, short follow-up, surrogate markers, limited generalisability, industry funding). Be specific.",
   "industry_funding": "Name of funding body if meat/dairy/egg industry funded, otherwise null",
   "counter_evidence_exists": true,
-  "counter_response": "What the broader evidence says — ONLY if higher-quality (lower tier), larger sample size, or more recent studies in the provided list contradict this finding. If no such evidence exists, set this to null and set counter_evidence_exists to false.",
-  "contradicting_pmids": ["pmid1", "pmid2"]
+  "counter_response": "Cite specific GROUP A studies by PMID and finding that directly contradict this claim. Only include if a GROUP A study clearly contradicts the contested finding. If none do, set to null.",
+  "contradicting_pmids": ["pmid_from_group_a"]
 }}
+
+IMPORTANT: For counter_response, only reference GROUP A studies. If any GROUP A study contradicts the contested finding — even partially — set counter_evidence_exists to true and explain how. Do not set counter_evidence_exists to false unless you have checked every GROUP A study and none contradict it.
 
 claim_type must be "negative" or "meat_positive".
 Return JSON with key "contested" containing the array. Return empty array if no qualifying studies found.
-
----
-STUDIES:
-
-{formatted}
 """
 
 
 def extract_contested_for_topic(
     topic_key: str,
     topic_config: dict,
-    all_studies: list[dict],
+    high_quality_studies: list[dict],
+    candidate_studies: list[dict],
 ) -> list[dict]:
-    """Extract contested claims from ALL studies for a topic using the 8b model."""
-    if not all_studies:
+    """Extract contested claims, explicitly separating counter-evidence pool from candidates."""
+    if not candidate_studies:
         return []
 
     client = _get_client()
-    user_prompt = _build_contested_user_prompt(topic_key, topic_config, all_studies)
+    user_prompt = _build_contested_user_prompt(topic_key, topic_config, high_quality_studies, candidate_studies)
 
     messages = [
         {"role": "system", "content": CONTESTED_SYSTEM_PROMPT},
@@ -597,10 +620,10 @@ def extract_contested_for_all_topics(
             insert_contested_for_topic(conn, topic_key, [])
             continue
 
-        print(f"    Sending top {len(all_studies)} studies to Groq...")
+        print(f"    Sending {len(high_quality)} counter-evidence + {len(lower_quality)} candidates to Groq...")
 
         try:
-            contested = extract_contested_for_topic(topic_key, topic_config, all_studies)
+            contested = extract_contested_for_topic(topic_key, topic_config, high_quality, lower_quality)
         except Exception as exc:
             print(f"    [ERROR] Contested extraction failed for {topic_key}: {exc}")
             continue
