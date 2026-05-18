@@ -577,11 +577,20 @@ def extract_contested_for_all_topics(
 
         print(f"  Extracting contested claims for: {topic_config['name']}")
 
-        # All tiers, capped — prioritise tier 1-2 first so counter-evidence
-        # candidates are included, then fill remaining slots with others
-        all_studies = get_studies_for_topic(conn, topic_key, min_quality_tier=5)
-        all_studies = sorted(all_studies, key=lambda s: (s.get("quality_tier") or 5, -(s.get("pub_year") or 0)))
-        all_studies = all_studies[:MAX_STUDIES_PER_EXTRACTION]
+        # Build a mixed pool: top 5 tier 1-2 studies (counter-evidence candidates)
+        # + top 5 tier 3-5 studies (where contested claims are most likely to appear).
+        # Sending only the best-quality studies meant contested findings were never
+        # in the prompt at all, so the model had nothing to contest.
+        high_quality = get_studies_for_topic(conn, topic_key, min_quality_tier=2)
+        high_quality = sorted(high_quality, key=lambda s: (s.get("quality_tier") or 5, -(s.get("pub_year") or 0)))
+        high_quality = high_quality[:5]
+
+        lower_quality = get_studies_for_topic(conn, topic_key, min_quality_tier=5)
+        lower_quality = [s for s in lower_quality if (s.get("quality_tier") or 5) >= 3]
+        lower_quality = sorted(lower_quality, key=lambda s: (s.get("quality_tier") or 5, -(s.get("pub_year") or 0)))
+        lower_quality = lower_quality[:5]
+
+        all_studies = high_quality + lower_quality
 
         if not all_studies:
             print(f"    No studies found for {topic_key}, skipping.")
