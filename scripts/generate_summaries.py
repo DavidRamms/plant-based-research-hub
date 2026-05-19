@@ -496,21 +496,27 @@ Scan these for contested findings.
 ## Your task
 
 Identify studies from GROUP B that meet ALL of the following:
-- The study involves **human participants** (not animals, cells, or in vitro models)
-- The study directly compares plant-based, vegan, or vegetarian diets to omnivorous or meat-containing diets — OR reports a specific health benefit of meat/animal products in humans
-- The negative or meat-positive finding is **directly relevant to the topic "{topic_name}"** — do not flag a study whose contested finding is about a different health domain (e.g. do not flag a cancer finding under a diabetes topic, or a bone study under a cardiovascular topic)
-- The study meets EITHER of these criteria:
-  1. **Direct negative finding**: reports that a plant-based, vegan, or vegetarian diet caused harm, increased disease risk, or led to worse health outcomes vs omnivorous/meat-containing diets
-  2. **Meat-positive finding**: reports that consuming meat, animal protein, or animal products provided a specific health benefit in humans
 
-Do NOT flag studies whose contested finding falls outside the topic "{topic_name}". Do NOT flag animal studies, cell studies, or null findings without a directional claim.
+**Eligibility rules — ALL must be true:**
+- Human participants only (not animal models, cell cultures, or in vitro studies)
+- The finding is directly relevant to the topic "{topic_name}"
+- The study meets EXACTLY ONE of these criteria:
+  1. **Direct negative finding**: the study concludes that plant-based, vegan, or vegetarian diets INCREASED risk, WORSENED outcomes, or were HARMFUL compared to diets containing meat or animal products. The direction must be clearly negative for plant-based diets.
+  2. **Meat-positive finding**: the study concludes that eating meat, animal protein, or animal products REDUCED risk or IMPROVED a health outcome in humans.
+
+**Do NOT flag a study if:**
+- It shows plant-based diets are BENEFICIAL or PROTECTIVE (even if the benefit is modest or mixed) — a lower risk associated with plant-based diets is NOT a negative finding
+- It is neutral or shows no significant difference
+- It studies dietary patterns generally without a clear plant-based vs meat-containing comparison
+- Its main finding is outside the topic "{topic_name}"
+- It only involves animals, cells, or preclinical models
 
 For each qualifying study from GROUP B, return a JSON object with these fields:
 
 {{
   "pmid": "12345678",
   "claim_type": "negative",
-  "claim_summary": "List every specific health claim made in this study that qualifies — include ALL outcomes mentioned (e.g. if the study claims both higher fracture risk AND lower muscle mass, include both). Do not omit any qualifying claim from the abstract.",
+  "claim_summary": "State the specific negative or meat-positive finding in plain English, including the direction (e.g. 'This study found that vegan diets were associated with a 20% higher fracture risk compared to omnivores'). Do not copy the title. Do not describe what the study investigated — state what it concluded.",
   "study_limitations": "Comma-separated limitations: both stated in the abstract AND structurally inherent (self-reported dietary data, healthy user bias, short follow-up, surrogate markers, limited generalisability, industry funding). Be specific.",
   "industry_funding": "Name of funding body if meat/dairy/egg industry funded, otherwise null",
   "counter_evidence_exists": true,
@@ -547,7 +553,7 @@ def extract_contested_for_topic(
     ]
 
     response = client.chat.completions.create(
-        model=GROQ_STATS_MODEL,
+        model=GROQ_MODEL,
         messages=messages,
         temperature=0.1,
         max_tokens=4096,
@@ -569,7 +575,7 @@ def extract_contested_for_topic(
             ),
         })
         retry_response = client.chat.completions.create(
-            model=GROQ_STATS_MODEL,
+            model=GROQ_MODEL,
             messages=messages,
             temperature=0.1,
             max_tokens=4096,
