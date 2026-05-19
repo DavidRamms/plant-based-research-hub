@@ -498,11 +498,12 @@ Scan these for contested findings.
 Identify studies from GROUP B that meet ALL of the following:
 - The study involves **human participants** (not animals, cells, or in vitro models)
 - The study directly compares plant-based, vegan, or vegetarian diets to omnivorous or meat-containing diets — OR reports a specific health benefit of meat/animal products in humans
+- The negative or meat-positive finding is **directly relevant to the topic "{topic_name}"** — do not flag a study whose contested finding is about a different health domain (e.g. do not flag a cancer finding under a diabetes topic, or a bone study under a cardiovascular topic)
 - The study meets EITHER of these criteria:
   1. **Direct negative finding**: reports that a plant-based, vegan, or vegetarian diet caused harm, increased disease risk, or led to worse health outcomes vs omnivorous/meat-containing diets
   2. **Meat-positive finding**: reports that consuming meat, animal protein, or animal products provided a specific health benefit in humans
 
-Do NOT flag studies that: only involve animals or cell cultures, do not compare dietary patterns, or report null findings without a directional claim.
+Do NOT flag studies whose contested finding falls outside the topic "{topic_name}". Do NOT flag animal studies, cell studies, or null findings without a directional claim.
 
 For each qualifying study from GROUP B, return a JSON object with these fields:
 
@@ -513,7 +514,7 @@ For each qualifying study from GROUP B, return a JSON object with these fields:
   "study_limitations": "Comma-separated limitations: both stated in the abstract AND structurally inherent (self-reported dietary data, healthy user bias, short follow-up, surrogate markers, limited generalisability, industry funding). Be specific.",
   "industry_funding": "Name of funding body if meat/dairy/egg industry funded, otherwise null",
   "counter_evidence_exists": true,
-  "counter_response": "For each specific health outcome named in claim_summary, check whether a GROUP A study reports the opposite finding for that same outcome. Only cite a GROUP A study if it directly addresses the same outcome (e.g. if claim_summary is about fracture risk, only cite GROUP A studies about fracture risk — not studies about diabetes or cardiovascular disease). Write in plain English. If no GROUP A study addresses a given outcome, say so for that outcome.",
+  "counter_response": "For each specific health outcome named in claim_summary, check whether a GROUP A study reports the opposite finding for that EXACT same outcome. Only cite a GROUP A study if it directly addresses the same outcome — if claim_summary is about fracture risk, only cite GROUP A studies about fracture risk; if it is about colorectal cancer, only cite GROUP A studies about colorectal cancer. If no GROUP A study addresses the specific outcome, set counter_response to null and counter_evidence_exists to false. Do NOT cite a GROUP A study about a different outcome just because it is generally supportive of plant-based diets.",
   "contradicting_pmids": ["pmid_from_group_a"]
 }}
 
