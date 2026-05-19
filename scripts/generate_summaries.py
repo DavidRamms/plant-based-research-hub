@@ -264,6 +264,7 @@ For null findings (no significant difference found), extract them too with direc
 Respond ONLY with valid JSON containing a single key "stats" whose value is an array. Each element must have these fields:
 
 {{
+  "pmid": "12345678",
   "stat_sentence": "Vegan diets were associated with a 34% lower risk of cardiovascular mortality compared to omnivores",
   "original_quote": "exact text from abstract containing this stat",
   "outcome": "cardiovascular mortality",
@@ -275,6 +276,7 @@ Respond ONLY with valid JSON containing a single key "stats" whose value is an a
 }}
 
 Rules:
+- pmid must be the PMID shown in [PMID: XXXXX] for the study this stat comes from
 - diet_type must be one of: "vegan", "vegetarian", "plant-based", "meat-free", "other"
 - direction must be one of: "reduction", "increase", "null"
 - is_null_finding must be true only when direction is "null"
@@ -391,26 +393,16 @@ def extract_stats_for_all_topics(
             print(f"    [ERROR] Stats extraction failed for {topic_key}: {exc}")
             continue
 
-        # Enrich each stat with study metadata
-        # Build a lookup from pmid to study record for enrichment
+        # Enrich each stat with study metadata using PMID lookup (model now returns pmid)
         pmid_to_study: dict[str, dict] = {s["pmid"]: s for s in studies}
 
         enriched: list[dict] = []
         for stat in raw_stats:
-            # Try to find the study by matching original_quote or pmid hint in stat
-            # We associate stats with a study by finding the study whose abstract
-            # contains the original_quote text
-            original_quote = stat.get("original_quote", "")
-            matched_study: dict | None = None
-            if original_quote:
-                for study in studies:
-                    abstract = study.get("abstract") or ""
-                    if original_quote[:80].lower() in abstract.lower():
-                        matched_study = study
-                        break
+            matched_study = pmid_to_study.get(str(stat.get("pmid", "")))
 
             enriched_stat = dict(stat)
             enriched_stat["is_null_finding"] = 1 if stat.get("is_null_finding") else 0
+            # Always overwrite metadata from DB — never trust model-generated values
             if matched_study:
                 enriched_stat["pmid"] = matched_study.get("pmid")
                 enriched_stat["authors"] = matched_study.get("authors")
@@ -418,11 +410,11 @@ def extract_stats_for_all_topics(
                 enriched_stat["study_type"] = matched_study.get("study_type")
                 enriched_stat["quality_tier"] = matched_study.get("quality_tier")
             else:
-                enriched_stat.setdefault("pmid", None)
-                enriched_stat.setdefault("authors", None)
-                enriched_stat.setdefault("year", None)
-                enriched_stat.setdefault("study_type", None)
-                enriched_stat.setdefault("quality_tier", None)
+                enriched_stat["pmid"] = None
+                enriched_stat["authors"] = None
+                enriched_stat["year"] = None
+                enriched_stat["study_type"] = None
+                enriched_stat["quality_tier"] = None
 
             enriched.append(enriched_stat)
 

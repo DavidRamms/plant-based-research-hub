@@ -339,8 +339,15 @@ def mark_contested_stats(conn: sqlite3.Connection) -> None:
 
 
 def get_all_stats(conn: sqlite3.Connection) -> list[dict]:
-    """Return all stats ordered by quality_tier ASC, year DESC."""
-    cursor = conn.execute("SELECT * FROM stats ORDER BY quality_tier ASC, year DESC")
+    """Return all stats deduplicated by (pmid, outcome, magnitude), ordered by quality_tier ASC, year DESC."""
+    cursor = conn.execute("""
+        SELECT * FROM stats
+        WHERE id IN (
+            SELECT MIN(id) FROM stats
+            GROUP BY COALESCE(pmid, stat_sentence), outcome, magnitude
+        )
+        ORDER BY quality_tier ASC, year DESC
+    """)
     return [dict(row) for row in cursor.fetchall()]
 
 
